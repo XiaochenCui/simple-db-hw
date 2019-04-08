@@ -9,6 +9,15 @@ import java.util.*;
 public class TupleDesc implements Serializable {
 
     /**
+     * container stores the TDItem
+     */
+    private List<TDItem> tdItems = new ArrayList<>();
+
+    public List<TDItem> getTdItems() {
+        return tdItems;
+    }
+
+    /**
      * A help class to facilitate organizing the information of each field
      * */
     public static class TDItem implements Serializable {
@@ -72,6 +81,10 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr) {
         // some code goes here
+        for (int i = 0; i < typeAr.length; i++) {
+            TDItem tdItem = new TDItem(typeAr[i], null);
+            tdItems.add(tdItem);
+        }
     }
 
     /**
@@ -79,7 +92,7 @@ public class TupleDesc implements Serializable {
      */
     public int numFields() {
         // some code goes here
-        return 0;
+        return tdItems.size();
     }
 
     /**
@@ -162,7 +175,10 @@ public class TupleDesc implements Serializable {
 
     public boolean equals(Object o) {
         // some code goes here
-        return false;
+        if (this == o)
+            return true;
+        else
+            return false;
     }
 
     public int hashCode() {
