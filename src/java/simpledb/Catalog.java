@@ -18,6 +18,11 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    private Map<Integer, String> tableIdTableNameMap = new HashMap<>();
+    private Map<String, Integer> tableNameTableIdMap = new HashMap<>();
+    private Map<Integer, DbFile> tableIdDbTableMap = new HashMap<>();
+    private Map<Integer, String> tableIdPrimaryKeyMap = new HashMap<>();
+
     /**
      * Constructor.
      * Creates a new, empty catalog.
@@ -37,6 +42,10 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        tableIdTableNameMap.put(file.getId(), name);
+        tableNameTableIdMap.put(name, file.getId());
+        tableIdDbTableMap.put(file.getId(), file);
+        tableIdPrimaryKeyMap.put(file.getId(), pkeyField);
     }
 
     public void addTable(DbFile file, String name) {
@@ -60,7 +69,11 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+        if (tableNameTableIdMap.containsKey(name)) {
+            return tableNameTableIdMap.get(name);
+        }
+
+        throw new NoSuchElementException();
     }
 
     /**
@@ -71,7 +84,11 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (tableIdDbTableMap.containsKey(tableid)) {
+            return tableIdDbTableMap.get(tableid).getTupleDesc();
+        }
+
+        throw new NoSuchElementException();
     }
 
     /**
@@ -82,7 +99,11 @@ public class Catalog {
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (tableIdDbTableMap.containsKey(tableid)) {
+            return tableIdDbTableMap.get(tableid);
+        }
+
+        throw new NoSuchElementException();
     }
 
     public String getPrimaryKey(int tableid) {
@@ -97,7 +118,7 @@ public class Catalog {
 
     public String getTableName(int id) {
         // some code goes here
-        return null;
+        return tableIdTableNameMap.get(id);
     }
     
     /** Delete all tables from the catalog */
