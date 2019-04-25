@@ -1,6 +1,10 @@
 package simpledb;
 
 import java.io.Serializable;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 /**
  * A RecordId is a reference to a specific tuple on a specific page of a
@@ -32,7 +36,7 @@ public class RecordId implements Serializable {
      */
     public int getTupleNumber() {
         // some code goes here
-        return 0;
+        return this.tupleno;
     }
 
     /**
@@ -40,7 +44,7 @@ public class RecordId implements Serializable {
      */
     public PageId getPageId() {
         // some code goes here
-        return null;
+        return this.pid;
     }
 
     /**
@@ -53,6 +57,13 @@ public class RecordId implements Serializable {
     public boolean equals(Object o) {
         // some code goes here
         if (this == o)
+            return true;
+
+        if (o == null || getClass() != o.getClass()) return false;
+
+        RecordId recordId = (RecordId) o;
+
+        if (pid.equals(recordId.pid) && tupleno == recordId.tupleno)
             return true;
         else
             return false;
@@ -67,8 +78,15 @@ public class RecordId implements Serializable {
     @Override
     public int hashCode() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
-
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] encodedhash = digest.digest(
+                    String.format("record id page(%d), tupleno(%d)", this.pid.getPageNumber(), this.tupleno).getBytes(StandardCharsets.UTF_8));
+            ByteBuffer wrapped = ByteBuffer.wrap(encodedhash);
+            return wrapped.getInt();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return -1;
+        }
     }
-
 }

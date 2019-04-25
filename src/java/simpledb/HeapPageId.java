@@ -1,5 +1,11 @@
 package simpledb;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.prefs.AbstractPreferences;
+
 /** Unique identifier for HeapPage objects. */
 public class HeapPageId implements PageId {
     private int tabldId;
@@ -21,7 +27,7 @@ public class HeapPageId implements PageId {
     /** @return the table associated with this PageId */
     public int getTableId() {
         // some code goes here
-        return 0;
+        return this.tabldId;
     }
 
     /**
@@ -30,7 +36,7 @@ public class HeapPageId implements PageId {
      */
     public int getPageNumber() {
         // some code goes here
-        return 0;
+        return this.pgNo;
     }
 
     /**
@@ -41,7 +47,16 @@ public class HeapPageId implements PageId {
      */
     public int hashCode() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] encodedhash = digest.digest(
+                    String.format("heap page %d, %d", this.tabldId, this.pgNo).getBytes(StandardCharsets.UTF_8));
+            ByteBuffer wrapped = ByteBuffer.wrap(encodedhash);
+            return wrapped.getInt();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+            return -1;
+        }
     }
 
     /**
@@ -53,7 +68,17 @@ public class HeapPageId implements PageId {
      */
     public boolean equals(Object o) {
         // some code goes here
-        return false;
+        if (this == o)
+            return true;
+
+        if (o == null || getClass() != o.getClass()) return false;
+
+        HeapPageId heapPageId = (HeapPageId) o;
+
+        if ((tabldId == heapPageId.tabldId) && (pgNo == heapPageId.pgNo))
+            return true;
+        else
+            return false;
     }
 
     /**
