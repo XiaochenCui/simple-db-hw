@@ -75,7 +75,8 @@ public class HeapFileIterator implements DbFileIterator {
      */
     @Override
     public void rewind() throws DbException, TransactionAbortedException {
-
+        close();
+        open();
     }
 
     /**
