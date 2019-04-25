@@ -90,7 +90,11 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         // some code goes here
-        throw new UnsupportedOperationException("Implement this");
+        String out = "";
+        for (Field f: fields) {
+            out += f.toString();
+        }
+        return out;
     }
 
     /**

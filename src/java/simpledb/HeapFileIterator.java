@@ -8,15 +8,17 @@ public class HeapFileIterator implements DbFileIterator {
 
     private TransactionId tid;
     private int tableId;
+    private int numPages;
     private Permissions perm;
 
     private boolean isOpen;
     private int pgNo;
     private Iterator<Tuple> tuples;
 
-    public HeapFileIterator(TransactionId tid, int tableId, Permissions perm) {
+    public HeapFileIterator(TransactionId tid, int tableId, int numPages, Permissions perm) {
         this.tid = tid;
         this.tableId = tableId;
+        this.numPages = numPages;
         this.perm = perm;
     }
 
@@ -28,6 +30,7 @@ public class HeapFileIterator implements DbFileIterator {
     @Override
     public void open() throws DbException, TransactionAbortedException {
         isOpen = true;
+        pgNo = 0;
 
         tuples = getTuples();
     }
@@ -41,8 +44,11 @@ public class HeapFileIterator implements DbFileIterator {
 
         if (tuples.hasNext()) {
             return true;
-        } else {
+        } else if (pgNo >= numPages) {
             return false;
+        } else {
+            tuples = getTuples();
+            return hasNext();
         }
     }
 
@@ -82,6 +88,7 @@ public class HeapFileIterator implements DbFileIterator {
 
     private Iterator<Tuple> getTuples() throws TransactionAbortedException, DbException {
         HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, new HeapPageId(tableId, pgNo), perm);
+        pgNo++;
         return page.iterator();
     }
 }
