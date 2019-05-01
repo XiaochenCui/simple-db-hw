@@ -9,6 +9,14 @@ public class Join extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    private JoinPredicate p;
+    private OpIterator child1;
+    private OpIterator child2;
+
+    private TupleDesc tupleDesc;
+
+    private Tuple tupleTmp;
+
     /**
      * Constructor. Accepts two children to join and the predicate to join them
      * on
@@ -19,6 +27,21 @@ public class Join extends Operator {
      */
     public Join(JoinPredicate p, OpIterator child1, OpIterator child2) {
         // some code goes here
+        this.p = p;
+        this.child1 = child1;
+        this.child2 = child2;
+
+        this.tupleDesc = tupleDesc.merge(child1.getTupleDesc(), child2.getTupleDesc());
+
+        try {
+            if (child1.hasNext()) {
+                tupleTmp = child1.next();
+            }
+        } catch (DbException e) {
+            e.printStackTrace();
+        } catch (TransactionAbortedException e) {
+            e.printStackTrace();
+        }
     }
 
     public JoinPredicate getJoinPredicate() {
@@ -50,20 +73,28 @@ public class Join extends Operator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return tupleDesc;
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
         // some code goes here
+        child1.open();
+        child2.open();
+        super.open();
     }
 
     public void close() {
         // some code goes here
+        child1.close();
+        child2.close();
+        super.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        close();
+        open();
     }
 
     /**
@@ -86,6 +117,30 @@ public class Join extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
+        while (child1.hasNext()) {
+            if (!child2.hasNext()) {
+                tupleTmp = child1.next();
+                child2.rewind();
+            }
+            while (child2.hasNext()) {
+                Tuple tuple2 = child2.next();
+                if (p.filter(tupleTmp, tuple2)) {
+                    int i = 0;
+                    Tuple result = new Tuple(tupleDesc);
+                    for (Iterator<Field> it = tupleTmp.fields(); it.hasNext(); ) {
+                        Field field = it.next();
+                        result.setField(i, field);
+                        i++;
+                    }
+                    for (Iterator<Field> it = tuple2.fields(); it.hasNext(); ) {
+                        Field field = it.next();
+                        result.setField(i, field);
+                        i++;
+                    }
+                    return result;
+                }
+            }
+        }
         return null;
     }
 

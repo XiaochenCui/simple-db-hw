@@ -11,6 +11,15 @@ public class Aggregate extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    private OpIterator child;
+    private int afield;
+    private int gfield;
+    private Aggregator.Op aop;
+
+    private OpIterator results;
+
+    private Aggregator aggregator;
+
     /**
      * Constructor.
      * <p>
@@ -26,6 +35,20 @@ public class Aggregate extends Operator {
      */
     public Aggregate(OpIterator child, int afield, int gfield, Aggregator.Op aop) {
         // some code goes here
+        this.child = child;
+        this.afield = afield;
+        this.gfield = gfield;
+        this.aop = aop;
+
+        TupleDesc tupleDesc = child.getTupleDesc();
+        Type gbtype = tupleDesc.getFieldType(gfield);
+        Type atype = tupleDesc.getFieldType(afield);
+
+        if (atype == Type.INT_TYPE) {
+            aggregator = new IntegerAggregator(gfield, gbtype, afield, aop);
+        } else {
+            aggregator = new StringAggregator(gfield, gbtype, afield, aop);
+        }
     }
 
     /**
@@ -80,6 +103,10 @@ public class Aggregate extends Operator {
     public void open() throws NoSuchElementException, DbException,
             TransactionAbortedException {
         // some code goes here
+        super.open();
+        child.open();
+        doAggregate();
+        results.open();
     }
 
     /**
@@ -91,11 +118,16 @@ public class Aggregate extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
+        if (results.hasNext()) {
+            return results.next();
+        }
         return null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        close();
+        open();
     }
 
     /**
@@ -111,7 +143,7 @@ public class Aggregate extends Operator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return child.getTupleDesc();
     }
 
     public void close() {
@@ -129,4 +161,11 @@ public class Aggregate extends Operator {
         // some code goes here
     }
 
+    private void doAggregate() throws DbException, TransactionAbortedException {
+        while (child.hasNext()) {
+            Tuple t = child.next();
+            aggregator.mergeTupleIntoGroup(t);
+        }
+        results = aggregator.iterator();
+    }
 }
