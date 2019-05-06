@@ -40,7 +40,12 @@ public class IntegerAggregator implements Aggregator {
         groups = new HashMap<>();
         results = new HashMap<>();
 
-        Type[] types = new Type[]{gbfieldtype, Type.INT_TYPE};
+        Type[] types;
+        if (gbfield != Aggregator.NO_GROUPING) {
+            types = new Type[]{gbfieldtype, Type.INT_TYPE};
+        } else {
+            types = new Type[]{Type.INT_TYPE};
+        }
         td = new TupleDesc(types);
     }
 
@@ -53,7 +58,12 @@ public class IntegerAggregator implements Aggregator {
     public void mergeTupleIntoGroup(Tuple tup) {
         // some code goes here
         // get target key
-        Field key = tup.getField(gbfield);
+        Field key;
+        if (gbfield != Aggregator.NO_GROUPING) {
+            key = tup.getField(gbfield);
+        } else {
+            key = new IntField(0);
+        }
 
         // get target value
         Integer val = tup.getField(afield).hashCode();
@@ -70,10 +80,16 @@ public class IntegerAggregator implements Aggregator {
 
         // construct tuple
         Tuple tuple = new Tuple(td);
-        Field f1 = tup.getField(gbfield);
-        Field f2 = new IntField(aggregateVal);
-        tuple.setField(0, f1);
-        tuple.setField(1, f2);
+
+        if (gbfield != Aggregator.NO_GROUPING) {
+            Field f1 = tup.getField(gbfield);
+            Field f2 = new IntField(aggregateVal);
+            tuple.setField(0, f1);
+            tuple.setField(1, f2);
+        } else {
+            Field f1 = new IntField(aggregateVal);
+            tuple.setField(0, f1);
+        }
 
         results.put(key, tuple);
     }
@@ -125,6 +141,7 @@ public class IntegerAggregator implements Aggregator {
                 result /= integerArrayList.size();
                 break;
             case COUNT:
+                result = integerArrayList.size();
                 break;
             case SUM_COUNT:
                 break;
