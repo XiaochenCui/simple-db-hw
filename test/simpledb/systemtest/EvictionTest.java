@@ -35,6 +35,7 @@ public class EvictionTest extends SimpleDbTestBase {
         System.out.println("EvictionTest scan complete, testing memory usage of scan");
         long endMem = SystemTestUtil.getMemoryFootprint();
         long memDiff = (endMem - beginMem) / (1<<20);
+        System.out.println(String.format("memDiff: %d, beginMem: %d, endMem: %d", memDiff, beginMem, endMem));
         if (memDiff > MEMORY_LIMIT_IN_MB) {
             Assert.fail("Did not evict enough pages.  Scan took " + memDiff + " MB of RAM, when limit was " + MEMORY_LIMIT_IN_MB);
         }

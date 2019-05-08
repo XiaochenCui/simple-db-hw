@@ -1,4 +1,6 @@
-package simpledb;
+package simpledb.test;
+
+import simpledb.*;
 
 import java.io.File;
 import java.io.IOException;

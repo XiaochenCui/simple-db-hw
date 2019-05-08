@@ -2,7 +2,7 @@ package simpledb;
 
 import java.io.*;
 
-import java.util.ArrayList;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -34,6 +34,8 @@ public class BufferPool {
     private int numPages = 0;
     public ConcurrentHashMap<PageId, Page> buffer;
 
+    public ConcurrentHashMap<PageId, Long> accessTime;
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -43,6 +45,8 @@ public class BufferPool {
         // some code goes here
         this.numPages = numPages;
         this.buffer = new ConcurrentHashMap<>();
+
+        this.accessTime = new ConcurrentHashMap<>();
     }
 
     public static int getPageSize() {
@@ -81,8 +85,18 @@ public class BufferPool {
         if (page == null) {
             DbFile f = Database.getCatalog().getDatabaseFile(pid.getTableId());
             page = f.readPage(pid);
+
+            // evict page
+            evictPage();
+
+            // than insert
             buffer.put(pid, page);
         }
+
+        // refresh accessTime
+        Date date = new Date();
+        accessTime.put(pid, date.getTime());
+
         return page;
     }
 
@@ -199,7 +213,9 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-
+        for (PageId pageId: buffer.keySet()) {
+            flushPage(pageId);
+        }
     }
 
     /**
@@ -214,6 +230,9 @@ public class BufferPool {
     public synchronized void discardPage(PageId pid) {
         // some code goes here
         // not necessary for lab1
+        buffer.remove(pid);
+
+        accessTime.remove(pid);
     }
 
     /**
@@ -224,6 +243,9 @@ public class BufferPool {
     private synchronized void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+        Page page = buffer.get(pid);
+        Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
+        page.markDirty(false,null);
     }
 
     /**
@@ -241,6 +263,23 @@ public class BufferPool {
     private synchronized void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+        if (accessTime.size() == 0) {
+            return;
+        }
+
+        PageId stalestPageId = Collections.min(accessTime.entrySet(), Comparator.comparingLong(Map.Entry::getValue)).getKey();
+
+        // flush in case of the page is dirty
+        Page stalestPage = buffer.get(stalestPageId);
+        if (stalestPage.isDirty() != null) {
+            try {
+                flushPage(stalestPageId);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        discardPage(stalestPageId);
     }
 
 }
