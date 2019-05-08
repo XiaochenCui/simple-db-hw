@@ -48,7 +48,7 @@ public class HeapFileIterator implements DbFileIterator {
             return false;
         } else {
             tuples = getTuples();
-            return hasNext();
+            return tuples.hasNext();
         }
     }
 
