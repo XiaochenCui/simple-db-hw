@@ -34,6 +34,7 @@ public class Join extends Operator {
         this.tupleDesc = tupleDesc.merge(child1.getTupleDesc(), child2.getTupleDesc());
 
         try {
+            child1.open();
             if (child1.hasNext()) {
                 tupleTmp = child1.next();
             }
