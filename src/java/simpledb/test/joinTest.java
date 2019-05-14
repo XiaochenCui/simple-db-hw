@@ -15,10 +15,10 @@ public class joinTest {
 
         // create the tables, associate them with the data files
         // and tell the catalog about the schema the tables.
-        HeapFile table1 = new HeapFile(new File("some_data_file1.dat"), tupleDesc);
+        HeapFile table1 = new HeapFile(new File("data/lab2/some_data_file1.dat"), tupleDesc);
         Database.getCatalog().addTable(table1, "t1");
 
-        HeapFile table2 = new HeapFile(new File("some_data_file2.dat"), tupleDesc);
+        HeapFile table2 = new HeapFile(new File("data/lab2/some_data_file2.dat"), tupleDesc);
         Database.getCatalog().addTable(table2, "t2");
 
         // construct the query: we use two SeqScans, which spoon-feed

@@ -33,16 +33,6 @@ public class Join extends Operator {
 
         this.tupleDesc = tupleDesc.merge(child1.getTupleDesc(), child2.getTupleDesc());
 
-        try {
-            child1.open();
-            if (child1.hasNext()) {
-                tupleTmp = child1.next();
-            }
-        } catch (DbException e) {
-            e.printStackTrace();
-        } catch (TransactionAbortedException e) {
-            e.printStackTrace();
-        }
     }
 
     public JoinPredicate getJoinPredicate() {
@@ -81,6 +71,11 @@ public class Join extends Operator {
             TransactionAbortedException {
         // some code goes here
         child1.open();
+        if (child1.hasNext()) {
+            // initial tupleTmp so iterate can pause and revert
+            tupleTmp = child1.next();
+        }
+
         child2.open();
         super.open();
     }
@@ -118,7 +113,7 @@ public class Join extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
-        while (child1.hasNext()) {
+        while (child1.hasNext() || child2.hasNext()) {
             if (!child2.hasNext()) {
                 tupleTmp = child1.next();
                 child2.rewind();
