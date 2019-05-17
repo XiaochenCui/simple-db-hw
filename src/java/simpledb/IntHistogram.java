@@ -5,6 +5,14 @@ package simpledb;
  */
 public class IntHistogram {
 
+    private int buckets;
+    private int min;
+    private int max;
+
+    private int ntups;
+    private int[] histogram;
+    private int width;
+
     /**
      * Create a new IntHistogram.
      * <p>
@@ -23,6 +31,20 @@ public class IntHistogram {
      */
     public IntHistogram(int buckets, int min, int max) {
         // some code goes here
+        this.buckets = buckets;
+        this.min = min;
+        this.max = max;
+
+        this.ntups = 0;
+
+        int range = max-min+1;
+        if (range > buckets) {
+            width = (int) Math.ceil(range/(double)buckets);
+            histogram = new int[buckets];
+        } else {
+            width = 1;
+            histogram = new int[range];
+        }
     }
 
     /**
@@ -32,6 +54,9 @@ public class IntHistogram {
      */
     public void addValue(int v) {
         // some code goes here
+        int bucket_index = (int) Math.ceil((double)(v-min)/width);
+        histogram[bucket_index]++;
+        ntups++;
     }
 
     /**
@@ -45,9 +70,76 @@ public class IntHistogram {
      * @return Predicted selectivity of this particular operator and value
      */
     public double estimateSelectivity(Predicate.Op op, int v) {
-
         // some code goes here
-        return -1.0;
+        int bucket_index = (int) Math.ceil((double)(v-min)/width);
+        double bucket_fraction;
+        int fellow;
+        int bucket_right;
+        int bucket_left;
+
+        switch (op) {
+            case EQUALS:
+                if ((v < min) || (v > max)) return 0;
+
+                int height = histogram[bucket_index];
+                return (double) height/width/ntups;
+
+            case GREATER_THAN:
+                if (v < min) return 1;
+                if (v >= max) return 0;
+
+                bucket_right = (bucket_index + 1) * width;
+                bucket_fraction = (double) (bucket_right - v) / width;
+                fellow = (int) (bucket_fraction * histogram[bucket_index]);
+                for (int i = bucket_index+1; i < histogram.length; i++) {
+                    fellow += histogram[i];
+                }
+                return (double) fellow / ntups;
+
+            case LESS_THAN:
+                if (v > max) return 1;
+                if (v <= min) return 0;
+
+                bucket_left = bucket_index * width + 1;
+                bucket_fraction = (double) (v - bucket_left) / width;
+                fellow = (int) (bucket_fraction * histogram[bucket_index]);
+                for (int i = bucket_index-1; i >= 0; i--) {
+                    fellow += histogram[i];
+                }
+                return (double) fellow / ntups;
+
+            case LESS_THAN_OR_EQ:
+                if (v >= max) return 1;
+                if (v < min) return 0;
+
+                bucket_left = bucket_index * width + 1;
+                bucket_fraction = (double) (v - bucket_left + 1) / width;
+                fellow = (int) (bucket_fraction * histogram[bucket_index]);
+                for (int i = bucket_index-1; i >= 0; i--) {
+                    fellow += histogram[i];
+                }
+                return (double) fellow / ntups;
+            case GREATER_THAN_OR_EQ:
+                if (v <= min) return 1;
+                if (v > max) return 0;
+
+                bucket_right = (bucket_index + 1) * width;
+                bucket_fraction = (double) (bucket_right - v + 1) / width;
+                fellow = (int) (bucket_fraction * histogram[bucket_index]);
+                for (int i = bucket_index+1; i < histogram.length; i++) {
+                    fellow += histogram[i];
+                }
+                return (double) fellow / ntups;
+
+            case LIKE:
+                break;
+            case NOT_EQUALS:
+                if ((v < min) || (v > max)) return 1;
+
+                height = histogram[bucket_index];
+                return 1 - (double) height/width/ntups;
+        }
+        return 0;
     }
 
     /**
