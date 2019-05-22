@@ -138,7 +138,6 @@ public class JoinOptimizer {
                                                    String field2PureName, int card1, int card2, boolean t1pkey,
                                                    boolean t2pkey, Map<String, TableStats> stats,
                                                    Map<String, Integer> tableAliasToId) {
-        int card = 1;
         // some code goes here
         if (!joinOp.equals(Predicate.Op.EQUALS)) {
             return card1 * card2 * 3 / 10;
@@ -147,8 +146,30 @@ public class JoinOptimizer {
         } else if (t2pkey) {
             return card1;
         } else {
-            return Math.max(card1,card2);
+            return Math.max(card1, card2);
         }
+    }
+
+    /**
+     * Estimate the join cardinality of two tables.
+     */
+    public static int estimateTableJoinCardinalityBuckets(Predicate.Op joinOp,
+                                                          String table1Alias, String table2Alias, String field1PureName,
+                                                          String field2PureName, int card1, int card2, boolean t1pkey,
+                                                          boolean t2pkey, Map<String, TableStats> stats,
+                                                          Map<String, Integer> tableAliasToId) {
+        return 1;
+    }
+
+    /**
+     * Estimate the join cardinality of two tables.
+     */
+    public static int estimateTableJoinCardinalityMactching(Predicate.Op joinOp,
+                                                            String table1Alias, String table2Alias, String field1PureName,
+                                                            String field2PureName, int card1, int card2, boolean t1pkey,
+                                                            boolean t2pkey, Map<String, TableStats> stats,
+                                                            Map<String, Integer> tableAliasToId) {
+        return 1;
     }
 
     /**
@@ -211,11 +232,11 @@ public class JoinOptimizer {
         // j = set of join nodes
 
         // for (i in 1...|j|):
-        for (int i=1; i<= joins.size(); i++) {
-            Set<Set<LogicalJoinNode>> subsets = enumerateSubsets(joins,i);
+        for (int i = 1; i <= joins.size(); i++) {
+            Set<Set<LogicalJoinNode>> subsets = enumerateSubsets(joins, i);
 
             // for s in {all length i subsets of j}
-            for (Set<LogicalJoinNode> subset: subsets) {
+            for (Set<LogicalJoinNode> subset : subsets) {
 
                 // bestPlan = {}
 
@@ -223,11 +244,11 @@ public class JoinOptimizer {
                 double bestCostSoFar = Double.POSITIVE_INFINITY;
 
                 // for s' in {all length d-1 subsets of s}
-                for (LogicalJoinNode remainderNode: subset) {
+                for (LogicalJoinNode remainderNode : subset) {
 
                     // plan = best way to join (s-s') to subplan
                     // remainderPlan is a node
-                    CostCard costCard = computeCostAndCardOfSubplan(stats, filterSelectivities,remainderNode,subset,bestCostSoFar,planCache);
+                    CostCard costCard = computeCostAndCardOfSubplan(stats, filterSelectivities, remainderNode, subset, bestCostSoFar, planCache);
                     if (costCard == null) {
                         continue;
                     }
@@ -242,7 +263,7 @@ public class JoinOptimizer {
 
                 // optjoin(s) = bestPlan
                 if (bestCostCard != null) {
-                    planCache.addPlan(subset,bestCostCard.cost,bestCostCard.card,bestCostCard.plan);
+                    planCache.addPlan(subset, bestCostCard.cost, bestCostCard.card, bestCostCard.plan);
                 }
             }
         }
