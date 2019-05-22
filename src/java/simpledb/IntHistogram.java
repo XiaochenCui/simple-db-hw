@@ -54,7 +54,8 @@ public class IntHistogram {
      */
     public void addValue(int v) {
         // some code goes here
-        int bucket_index = (int) Math.ceil((double)(v-min)/width);
+        int bucket_index = (int) Math.floor((double)(v-min)/width);
+
         histogram[bucket_index]++;
         ntups++;
     }

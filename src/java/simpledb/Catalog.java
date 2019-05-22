@@ -113,7 +113,7 @@ public class Catalog {
 
     public String getPrimaryKey(int tableid) {
         // some code goes here
-        return null;
+        return tableIdPrimaryKeyMap.get(tableid);
     }
 
     public Iterator<Integer> tableIdIterator() {
@@ -131,6 +131,10 @@ public class Catalog {
      */
     public void clear() {
         // some code goes here
+        tableIdTableNameMap.clear();
+        tableNameTableIdMap.clear();
+        tableIdDbTableMap.clear();
+        tableIdPrimaryKeyMap.clear();
     }
 
     /**

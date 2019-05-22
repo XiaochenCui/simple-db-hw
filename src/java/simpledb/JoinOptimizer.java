@@ -205,8 +205,50 @@ public class JoinOptimizer {
         //Not necessary for labs 1--3
 
         // some code goes here
-        //Replace the following
-        return joins;
+        HashMap<Vector<LogicalJoinNode>, Vector<LogicalJoinNode>> optjoin = new HashMap<>();
+        PlanCache planCache = new PlanCache();
+
+        // j = set of join nodes
+
+        // for (i in 1...|j|):
+        for (int i=1; i<= joins.size(); i++) {
+            Set<Set<LogicalJoinNode>> subsets = enumerateSubsets(joins,i);
+
+            // for s in {all length i subsets of j}
+            for (Set<LogicalJoinNode> subset: subsets) {
+
+                // bestPlan = {}
+
+                CostCard bestCostCard = null;
+                double bestCostSoFar = Double.POSITIVE_INFINITY;
+
+                // for s' in {all length d-1 subsets of s}
+                for (LogicalJoinNode remainderNode: subset) {
+
+                    // plan = best way to join (s-s') to subplan
+                    // remainderPlan is a node
+                    CostCard costCard = computeCostAndCardOfSubplan(stats, filterSelectivities,remainderNode,subset,bestCostSoFar,planCache);
+                    if (costCard == null) {
+                        continue;
+                    }
+
+                    // if (cost(plan) < cost(bestPlan))
+                    //     bestPlan = plan
+                    if ((bestCostCard == null) || (bestCostCard.cost > costCard.cost)) {
+                        bestCostCard = costCard;
+                        bestCostSoFar = costCard.cost;
+                    }
+                }
+
+                // optjoin(s) = bestPlan
+                if (bestCostCard != null) {
+                    planCache.addPlan(subset,bestCostCard.cost,bestCostCard.card,bestCostCard.plan);
+                }
+            }
+        }
+
+        // return optjoin(j)
+        return planCache.getOrder(new HashSet<>(joins));
     }
 
     // ===================== Private Methods =================================
