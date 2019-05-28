@@ -105,29 +105,33 @@ public class HeapFile implements DbFile {
         // some code goes here
         ArrayList<Page> pageArrayList = new ArrayList<>();
 
+        HeapPage page = null;
+
         // Find a page with an empty slot
         int i = 0;
         for (; i < numPages(); i++) {
             HeapPageId pageId = new HeapPageId(getId(),i);
-            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid,pageId, Permissions.READ_WRITE);
+            page = (HeapPage) Database.getBufferPool().getPage(tid,pageId, Permissions.READ_WRITE);
             if (page.getNumEmptySlots() > 0) {
                 page.insertTuple(t);
                 pageArrayList.add(page);
-                return pageArrayList;
+                break;
+            } else {
+                page = null;
             }
         }
 
-        // Create a new page and append it to the physical file on dist
-        // if no such pages exist in the HeapFile
-        // The RecordID in the tuple must be updated correctly
-        HeapPage page = new HeapPage(new HeapPageId(getId(),i),HeapPage.createEmptyPageData());
-        page.insertTuple(t);
-        pageArrayList.add(page);
-        writePage(page);
+        if (page == null) {
+            // Create a new page and append it to the physical file on dist
+            // if no such pages exist in the HeapFile
+            // The RecordID in the tuple must be updated correctly
+            page = new HeapPage(new HeapPageId(getId(),i),HeapPage.createEmptyPageData());
+            page.insertTuple(t);
+            pageArrayList.add(page);
+            writePage(page);
+        }
 
         return pageArrayList;
-
-        // not necessary for lab1
     }
 
     // see DbFile.java for javadocs

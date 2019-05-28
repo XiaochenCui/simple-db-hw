@@ -34,6 +34,7 @@ public class BufferPool {
     private int numPages = 0;
     public ConcurrentHashMap<PageId, Page> buffer;
 
+    // Used to evict oldest page in the buffer pool
     public ConcurrentHashMap<PageId, Long> accessTime;
 
     /**
@@ -78,9 +79,24 @@ public class BufferPool {
      * @param pid  the ID of the requested page
      * @param perm the requested permissions on the page
      */
-    public Page getPage(TransactionId tid, PageId pid, Permissions perm)
+    public synchronized Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
-        // some code goes here
+        // block and acquire the desired lock before returning a page
+        Lock lock = null;
+        try {
+            if (perm.equals(Permissions.READ_ONLY)) {
+                lock = Lock.SHARED_LOCK;
+            } else if (perm.equals(Permissions.READ_WRITE)) {
+                lock = Lock.EXCLUSIVE_LOCK;
+            }
+            ConcurrentStatus.acquireLock(tid, pid, lock);
+        } catch (TransactionAbortedException e) {
+            // Release all locks hold by tid
+            System.out.println("acquire lock failed: " + tid + ", " + pid + ", " + lock);
+            ConcurrentStatus.releaseAllLocks(tid);
+            throw new TransactionAbortedException();
+        }
+
         Page page = this.buffer.get(pid);
         if (page == null) {
             DbFile f = Database.getCatalog().getDatabaseFile(pid.getTableId());
@@ -110,8 +126,7 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public void releasePage(TransactionId tid, PageId pid) {
-        // some code goes here
-        // not necessary for lab1|lab2
+        ConcurrentStatus.releaseAllLocks(pid);
     }
 
     /**
@@ -120,17 +135,14 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      */
     public void transactionComplete(TransactionId tid) throws IOException {
-        // some code goes here
-        // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /**
      * Return true if the specified transaction has a lock on the specified page
      */
     public boolean holdsLock(TransactionId tid, PageId p) {
-        // some code goes here
-        // not necessary for lab1|lab2
-        return false;
+        return ConcurrentStatus.holdsLock(tid, p);
     }
 
     /**
@@ -142,8 +154,19 @@ public class BufferPool {
      */
     public void transactionComplete(TransactionId tid, boolean commit)
             throws IOException {
-        // some code goes here
-        // not necessary for lab1|lab2
+        for (PageId pageId : buffer.keySet()) {
+            ConcurrentStatus.releaseLock(tid, pageId);
+            if (commit) {
+                flushPage(pageId);
+            } else {
+                Page page = buffer.get(pageId);
+                if (page.isDirty() != null) {
+                    discardPage(pageId);
+                }
+            }
+        }
+
+        ConcurrentStatus.removeTransaction(tid);
     }
 
     /**
@@ -167,13 +190,13 @@ public class BufferPool {
         // not necessary for lab1
 
         // insert tuple
-        ArrayList<Page> pageArrayList = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid,t);
+        ArrayList<Page> pageArrayList = Database.getCatalog().getDatabaseFile(tableId).insertTuple(tid, t);
 
-        for (Page page: pageArrayList) {
+        for (Page page : pageArrayList) {
             // set pages as dirty
-            page.markDirty(true,tid);
+            page.markDirty(true, tid);
             // put page to buffer
-            buffer.put(page.getId(),page);
+            buffer.put(page.getId(), page);
         }
     }
 
@@ -202,7 +225,7 @@ public class BufferPool {
 
         // delete tuple
         int tableId = pageId.getTableId();
-        Database.getCatalog().getDatabaseFile(tableId).deleteTuple(tid,t);
+        Database.getCatalog().getDatabaseFile(tableId).deleteTuple(tid, t);
     }
 
     /**
@@ -213,7 +236,7 @@ public class BufferPool {
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
         // not necessary for lab1
-        for (PageId pageId: buffer.keySet()) {
+        for (PageId pageId : buffer.keySet()) {
             flushPage(pageId);
         }
     }
@@ -245,7 +268,10 @@ public class BufferPool {
         // not necessary for lab1
         Page page = buffer.get(pid);
         Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
-        page.markDirty(false,null);
+        page.markDirty(false, null);
+
+        // release locks associated with the page
+        ConcurrentStatus.releaseAllLocks(pid);
     }
 
     /**
@@ -274,12 +300,10 @@ public class BufferPool {
         if (stalestPage.isDirty() != null) {
             try {
                 flushPage(stalestPageId);
+                discardPage(stalestPageId);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
-
-        discardPage(stalestPageId);
     }
-
 }

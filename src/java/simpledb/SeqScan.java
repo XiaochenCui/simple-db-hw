@@ -80,7 +80,7 @@ public class SeqScan implements OpIterator {
         // some code goes here
         HeapFile heapFile = (HeapFile) Database.getCatalog().getDatabaseFile(tableId);
         int numPages = heapFile.numPages();
-        tupleIterator = new HeapFileIterator(tid, tableId, numPages, null);
+        tupleIterator = new HeapFileIterator(tid, tableId, numPages, Permissions.READ_ONLY);
         tupleIterator.open();
     }
 
