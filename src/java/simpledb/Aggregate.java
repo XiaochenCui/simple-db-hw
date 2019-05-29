@@ -133,8 +133,11 @@ public class Aggregate extends Operator {
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
-        close();
-        open();
+
+        // Call child.open() while cause a bug: since the previous aggregate results
+        // is not clean, the new result will be wrong.
+        // So we only rewind the results, not repeat the actual aggregate computation
+        results.rewind();
     }
 
     /**
@@ -155,6 +158,9 @@ public class Aggregate extends Operator {
 
     public void close() {
         // some code goes here
+        super.close();
+        child.close();
+        results.close();
     }
 
     @Override
