@@ -1,12 +1,22 @@
 package simpledb;
 
+import org.apache.log4j.Logger;
+
+import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ConcurrentStatus {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
     private static AtomicReference<ConcurrentStatus> _instance = new AtomicReference<>(new ConcurrentStatus());
+
+    private static final int POLL_INTERVAL = 20;
+    private static final int TIMEOUT = 20 * 1000;
 
     private static HashMap<PageId, Set<TransactionId>> sLockMap = new HashMap<>();
     private static HashMap<PageId, TransactionId> xLockMap = new HashMap<>();
@@ -14,6 +24,8 @@ public class ConcurrentStatus {
     private static HashMap<TransactionId, Set<PageId>> holdPages = new HashMap<>();
 
     private final WaitForGraph graph;
+
+    private static ReentrantLock globalLock = new ReentrantLock();
 
     private ConcurrentStatus() {
         this.graph = new WaitForGraph();
@@ -24,116 +36,167 @@ public class ConcurrentStatus {
     }
 
     /**
-     * Acquire a s/x lock on a page
+     * Acquire a s/x globalLock on a page
      */
-    public synchronized static void acquireLock(TransactionId transactionId, PageId pageId, Lock lock) throws TransactionAbortedException {
-        int MAX_WAIT = 3 * 1000;
+    public static void acquireLock(TransactionId transactionId, PageId pageId, Lock lock) throws TransactionAbortedException {
+
+        logger.info(String.format("%s try to acquire %s on %s", transactionId, lock, pageId));
+
+
         long startTime = System.currentTimeMillis();
-        while ((System.currentTimeMillis() - startTime) < MAX_WAIT) {
-            try {
-                if (lock.equals(Lock.SHARED_LOCK)) {
+        while ((System.currentTimeMillis() - startTime) < TIMEOUT) {
+            if (lock.equals(Lock.SHARED_LOCK)) {
 
-                    // Check if there is deadlock before acquire the lock
-                    // 1. add edge
-                    if (xLockMap.containsKey(pageId)) {
-                        getGraph().addEdge(transactionId, xLockMap.get(pageId));
+                // Check if there is deadlock before acquire the globalLock
+                // 1. add edge
+                if (xLockMap.containsKey(pageId)) {
+                    getGraph().addEdge(transactionId, xLockMap.get(pageId));
+                }
+                // 2. check cycle
+                if (getGraph().containsCycle()) {
+                    throw new TransactionAbortedException();
+                }
+
+                if (!xLockMap.containsKey(pageId) || xLockMap.get(pageId).equals(transactionId)) {
+                    addLock(transactionId, pageId, lock);
+                    return;
+                }
+            } else if (lock.equals(Lock.EXCLUSIVE_LOCK)) {
+
+                // Check if there is deadlock before acquire the globalLock
+                // 1. add edge
+                if (xLockMap.containsKey(pageId)) {
+                    getGraph().addEdge(transactionId, xLockMap.get(pageId));
+                }
+                if (sLockMap.get(pageId) != null && sLockMap.get(pageId).size() != 0) {
+                    globalLock.lock();
+                    for (TransactionId tId1 : sLockMap.get(pageId)) {
+                        getGraph().addEdge(transactionId, tId1);
                     }
-                    // 2. check cycle
-                    if (getGraph().containsCycle()) {
-                        throw new TransactionAbortedException();
-                    }
+                    globalLock.unlock();
+                }
 
-                    if (!xLockMap.containsKey(pageId) || xLockMap.get(pageId).equals(transactionId)) {
-                        sLockMap.putIfAbsent(pageId, new HashSet<>());
-                        sLockMap.get(pageId).add(transactionId);
+                // 2. check cycle
+                if (getGraph().containsCycle()) {
+                    logger.error("cycle detected");
+                    throw new TransactionAbortedException();
+                }
 
-                        holdPages.putIfAbsent(transactionId, new HashSet<>());
-                        holdPages.get(transactionId).add(pageId);
+                if (!xLockMap.containsKey(pageId) || xLockMap.get(pageId).equals(transactionId)) {
+                    // If transaction t is the only transaction holding a shared globalLock on
+                    // an object o, t may upgrade its globalLock on o to an exclusive globalLock.
+                    if (sLockMap.get(pageId) == null || sLockMap.get(pageId).size() == 0 || (sLockMap.get(pageId).size() == 1 && sLockMap.get(pageId).contains(transactionId))) {
+                        addLock(transactionId, pageId, lock);
                         return;
                     }
-                } else if (lock.equals(Lock.EXCLUSIVE_LOCK)) {
-
-                    // Check if there is deadlock before acquire the lock
-                    // 1. add edge
-                    if (xLockMap.containsKey(pageId)) {
-                        getGraph().addEdge(transactionId, xLockMap.get(pageId));
-                    }
-                    if (sLockMap.get(pageId) != null && sLockMap.get(pageId).size() != 0) {
-                        for (TransactionId tId1: sLockMap.get(pageId)) {
-                            getGraph().addEdge(transactionId, tId1);
-                        }
-                    }
-                    // 2. check cycle
-                    if (getGraph().containsCycle()) {
-                        System.out.println("[contain cycle] acquire lock failed: " + transactionId + ", " + pageId + ", " + lock);
-                        throw new TransactionAbortedException();
-                    }
-
-                    if (!xLockMap.containsKey(pageId) || xLockMap.get(pageId).equals(transactionId)) {
-                        // If transaction t is the only transaction holding a shared lock on
-                        // an object o, t may upgrade its lock on o to an exclusive lock.
-                        if (sLockMap.get(pageId) == null || (sLockMap.get(pageId).size() == 1 && sLockMap.get(pageId).contains(transactionId))) {
-                            xLockMap.put(pageId,transactionId);
-
-                            holdPages.putIfAbsent(transactionId, new HashSet<>());
-                            holdPages.get(transactionId).add(pageId);
-                            return;
-                        }
-                    }
                 }
-                Thread.sleep(100);
+            }
+            try {
+                showStatus();
+                Thread.sleep(POLL_INTERVAL);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
+        logger.error("timeout");
         throw new TransactionAbortedException();
     }
 
+    public synchronized static void addLock(TransactionId transactionId, PageId pageId, Lock lock) {
+        globalLock.lock();
+
+        if (lock.equals(Lock.SHARED_LOCK)) {
+            sLockMap.putIfAbsent(pageId, new HashSet<>());
+            sLockMap.get(pageId).add(transactionId);
+
+            holdPages.putIfAbsent(transactionId, new HashSet<>());
+            holdPages.get(transactionId).add(pageId);
+            logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
+        } else if (lock.equals(Lock.EXCLUSIVE_LOCK)) {
+            if (transactionId.getId() != 0) {
+                logger.debug("");
+            }
+            xLockMap.put(pageId, transactionId);
+
+            holdPages.putIfAbsent(transactionId, new HashSet<>());
+            holdPages.get(transactionId).add(pageId);
+            logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
+        }
+
+        globalLock.unlock();
+    }
+
     /**
-     * Release a s/x lock on a page
+     * Release a s/x globalLock on a page
      */
     public synchronized static void releaseLock(TransactionId transactionId, PageId pageId) {
+        globalLock.lock();
+
+        logger.debug(String.format("release %s's locks on %s", transactionId, pageId));
         if (sLockMap.get(pageId) != null) {
             sLockMap.get(pageId).remove(transactionId);
         }
+
         xLockMap.remove(pageId);
 
-        if (holdPages.get(transactionId) != null) {
-            holdPages.get(transactionId).remove(pageId);
-        }
+        globalLock.unlock();
     }
 
     /**
      * Release all locks on a page
      */
     public synchronized static void releaseAllLocks(PageId pageId) {
+        globalLock.lock();
+
+        logger.debug(String.format("release all locks on %s", pageId));
+
         sLockMap.remove(pageId);
         xLockMap.remove(pageId);
 
-        for (TransactionId transactionId: holdPages.keySet()) {
+        for (TransactionId transactionId : holdPages.keySet()) {
             holdPages.get(transactionId).remove(pageId);
         }
+
+        globalLock.unlock();
     }
 
     /**
      * Release all locks on a transaction
      */
     public synchronized static void releaseAllLocks(TransactionId transactionId) {
-        for (PageId pageId: holdPages.get(transactionId)) {
-            releaseLock(transactionId,pageId);
+        logger.debug(String.format("release all locks on %s", transactionId));
+
+        if (holdPages.get(transactionId) != null) {
+            for (PageId pageId : holdPages.get(transactionId)) {
+                releaseLock(transactionId, pageId);
+            }
         }
 
+        globalLock.lock();
         holdPages.remove(transactionId);
+        globalLock.unlock();
     }
 
     public synchronized static boolean holdsLock(TransactionId transactionId, PageId pageId) {
-        if (sLockMap.get(pageId) != null || xLockMap.containsKey(pageId)) {
+        if (sLockMap.get(pageId) != null && sLockMap.get(pageId).contains(transactionId))
             return true;
-        }
+
+        if (xLockMap.get(pageId) != null && xLockMap.get(pageId).equals(transactionId))
+            return true;
+
         return false;
     }
 
     public synchronized static void removeTransaction(TransactionId transactionId) {
-        getGraph().removeRertex(transactionId);
+        releaseAllLocks(transactionId);
+        getGraph().removeVertex(transactionId);
+    }
+
+    public synchronized static void showStatus() {
+        globalLock.lock();
+        logger.debug("sLockMap: " + sLockMap);
+        logger.debug("xLockMap: " + xLockMap);
+        logger.debug("holdPages: " + holdPages);
+        globalLock.unlock();
     }
 }

@@ -26,6 +26,10 @@ public class HeapPageId implements PageId {
         this.pgNo = pgNo;
     }
 
+    public String toString() {
+        return String.format("heapPageId.%s.%s", tabldId, pgNo);
+    }
+
     /**
      * @return the table associated with this PageId
      */

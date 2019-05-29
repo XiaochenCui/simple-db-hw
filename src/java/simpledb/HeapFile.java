@@ -153,7 +153,7 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        return new HeapFileIterator(tid, getId(), numPages(), null);
+        return new HeapFileIterator(tid, getId(), numPages(), Permissions.READ_ONLY);
     }
 
 }

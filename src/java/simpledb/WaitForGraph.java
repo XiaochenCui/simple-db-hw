@@ -1,8 +1,13 @@
 package simpledb;
 
+import org.apache.log4j.Logger;
+
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
 public class WaitForGraph {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     private HashMap<TransactionId, HashSet<TransactionId>> adjVertices;
 
@@ -11,14 +16,16 @@ public class WaitForGraph {
     }
 
     public void printGraph() {
-        System.out.println("----");
+        String totalOut = "";
         for (Map.Entry<TransactionId, HashSet<TransactionId>> entry : adjVertices.entrySet()) {
-            String l = "";
+            String out = "";
             for (TransactionId end : entry.getValue()) {
-                l += end.getId() + ", ";
+                out += end.getId() + ", ";
             }
-            System.out.println(entry.getKey().getId() + " -> " + l);
+            out = entry.getKey().getId() + " -> " + out + "; ";
+            totalOut += out;
         }
+        logger.debug(totalOut);
     }
 
     public synchronized void addVertex(TransactionId vertex) {
@@ -65,7 +72,7 @@ public class WaitForGraph {
                             l += tid.getId() + "->";
                         }
                         l += end.getId();
-                        System.out.println("cycle found: " + l);
+                        logger.info("cycle found: " + l);
                         return true;
                     }
 
@@ -77,8 +84,8 @@ public class WaitForGraph {
         return false;
     }
 
-    public synchronized boolean removeRertex(TransactionId transactionId) {
-        System.out.println("before remove:");
+    public synchronized boolean removeVertex(TransactionId transactionId) {
+        logger.debug("before remove:");
         printGraph();
 
         adjVertices.remove(transactionId);
@@ -86,7 +93,7 @@ public class WaitForGraph {
             transactionIds.remove(transactionId);
         }
 
-        System.out.println("after remove:");
+        logger.debug("after remove:");
         printGraph();
 
         return true;

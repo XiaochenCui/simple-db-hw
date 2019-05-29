@@ -16,6 +16,7 @@ public class LogExample {
 		if(logger.isDebugEnabled()){
 			logger.debug("This is debug : " + parameter);
 		}
+		logger.debug("This is debug : " + parameter);
 
 		if(logger.isInfoEnabled()){
 			logger.info("This is info : " + parameter);

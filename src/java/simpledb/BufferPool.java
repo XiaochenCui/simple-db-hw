@@ -1,7 +1,10 @@
 package simpledb;
 
+import org.apache.log4j.Logger;
+
 import java.io.*;
 
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -17,6 +20,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * @Threadsafe, all fields are final
  */
 public class BufferPool {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
     /**
      * Bytes per page, including header.
      */
@@ -79,7 +85,7 @@ public class BufferPool {
      * @param pid  the ID of the requested page
      * @param perm the requested permissions on the page
      */
-    public synchronized Page getPage(TransactionId tid, PageId pid, Permissions perm)
+    public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
         // block and acquire the desired lock before returning a page
         Lock lock = null;
@@ -90,9 +96,10 @@ public class BufferPool {
                 lock = Lock.EXCLUSIVE_LOCK;
             }
             ConcurrentStatus.acquireLock(tid, pid, lock);
+            ConcurrentStatus.showStatus();
         } catch (TransactionAbortedException e) {
             // Release all locks hold by tid
-            System.out.println("acquire lock failed: " + tid + ", " + pid + ", " + lock);
+            logger.info("acquire lock failed: " + tid + ", " + pid + ", " + lock);
             ConcurrentStatus.releaseAllLocks(tid);
             throw new TransactionAbortedException();
         }
@@ -155,9 +162,8 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid, boolean commit)
             throws IOException {
         for (PageId pageId : buffer.keySet()) {
-            ConcurrentStatus.releaseLock(tid, pageId);
             if (commit) {
-                flushPage(pageId);
+                flushPages(tid);
             } else {
                 Page page = buffer.get(pageId);
                 if (page.isDirty() != null) {
@@ -280,6 +286,11 @@ public class BufferPool {
     public synchronized void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // not necessary for lab1|lab2
+        for (PageId pageId : buffer.keySet()) {
+            if (buffer.get(pageId) != null && holdsLock(tid, pageId)) {
+                flushPage(pageId);
+            }
+        }
     }
 
     /**
