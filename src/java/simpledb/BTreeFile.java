@@ -1,8 +1,10 @@
 package simpledb;
 
 import java.io.*;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
+import org.apache.log4j.Logger;
 import simpledb.Predicate.Op;
 
 /**
@@ -19,6 +21,8 @@ import simpledb.Predicate.Op;
  * @see simpledb.BTreeRootPtrPage#BTreeRootPtrPage
  */
 public class BTreeFile implements DbFile {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     private final File f;
     private final TupleDesc td;
@@ -190,6 +194,39 @@ public class BTreeFile implements DbFile {
                                        Field f)
             throws DbException, TransactionAbortedException {
         // some code goes here
+
+        try {
+            // get root page
+            BTreeRootPtrPage rootPtrPage = getRootPtrPage(tid,dirtypages);
+
+            // get first header pageId
+            BTreePageId headerPageId = rootPtrPage.getHeaderId();
+
+            if (headerPageId == null) {
+                logger.info("Header page is null");
+                return null;
+            }
+
+            // get first header page
+            BTreeInternalPage headerPage = (BTreeInternalPage) getPage(tid,dirtypages,headerPageId,perm);
+
+            BTreeInternalPageReverseIterator it = new BTreeInternalPageReverseIterator(headerPage);
+            if (it.hasNext()) {
+                BTreeEntry entry = it.next();
+                logger.debug("entry: " + entry);
+                BTreePageId leftChildPageId = entry.getLeftChild();
+
+                // get page
+                BTreeLeafPage leftChildPage = (BTreeLeafPage) getPage(tid,dirtypages,leftChildPageId,perm);
+            } else {
+                return null;
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
         return null;
     }
 
