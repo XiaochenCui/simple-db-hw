@@ -88,4 +88,11 @@ public interface DbFile {
      * @return TupleDesc of this DbFile.
      */
     public TupleDesc getTupleDesc();
+
+    /**
+     * Return the file.
+     *
+     * @returen file.
+     */
+    public File getFile();
 }

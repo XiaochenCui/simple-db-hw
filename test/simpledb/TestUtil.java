@@ -239,6 +239,8 @@ public class TestUtil {
 		public TupleDesc getTupleDesc() {			
 			return td;
 		}
+
+		public File getFile() {return null;}
     }
 
     /**
