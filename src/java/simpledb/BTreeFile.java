@@ -148,6 +148,22 @@ public class BTreeFile implements DbFile {
     public void writePage(Page page) throws IOException {
         BTreePageId id = (BTreePageId) page.getId();
 
+        logger.info(String.format("[write page]write page %s, id: %s", page, page.getId()));
+        if (page.getClass() == BTreeRootPtrPage.class) {
+            logger.info(String.format("[write page][rootptr page] root id: %s, header id: %s", ((BTreeRootPtrPage) page).getRootId(), ((BTreeRootPtrPage) page).getHeaderId()));
+        } else if (page.getClass() == BTreeLeafPage.class) {
+            logger.info(String.format("[write page][leaf page] left id: %s, right id: %s, number of tuples: %s", ((BTreeLeafPage)page).getLeftSiblingId(), ((BTreeLeafPage) page).getRightSiblingId(), ((BTreeLeafPage) page).getNumTuples()));
+        } else if (page.getClass() == BTreeInternalPage.class) {
+            int num = ((BTreeInternalPage) page).getNumEntries();
+            for (int i = 0; i < num; i++) {
+                try {
+                    logger.info(String.format("[write page][internal page] key: %s, child id: %s", ((BTreeInternalPage) page).getKey(i), ((BTreeInternalPage) page).getChildId(i)));
+                } catch (NoSuchElementException e) {
+                    logger.error(String.format("[write page][internal page] index: %s", i));
+                }
+            }
+        }
+
         byte[] data = page.getPageData();
         RandomAccessFile rf = new RandomAccessFile(f, "rw");
         if (id.pgcateg() == BTreePageId.ROOT_PTR) {
@@ -196,36 +212,26 @@ public class BTreeFile implements DbFile {
         // some code goes here
 
         try {
-            // get root page
             BTreeRootPtrPage rootPtrPage = getRootPtrPage(tid,dirtypages);
 
-            // get first header pageId
-            BTreePageId headerPageId = rootPtrPage.getHeaderId();
+            BTreePageId rootPageId = rootPtrPage.getRootId();
+            BTreeInternalPage rootPage = (BTreeInternalPage) getPage(tid,dirtypages,rootPageId,perm);
 
-            if (headerPageId == null) {
-                logger.info("Header page is null");
-                return null;
-            }
-
-            // get first header page
-            BTreeInternalPage headerPage = (BTreeInternalPage) getPage(tid,dirtypages,headerPageId,perm);
-
-            BTreeInternalPageReverseIterator it = new BTreeInternalPageReverseIterator(headerPage);
+            BTreeInternalPageIterator it = new BTreeInternalPageIterator(rootPage);
             if (it.hasNext()) {
-                BTreeEntry entry = it.next();
-                logger.debug("entry: " + entry);
-                BTreePageId leftChildPageId = entry.getLeftChild();
-
-                // get page
-                BTreeLeafPage leftChildPage = (BTreeLeafPage) getPage(tid,dirtypages,leftChildPageId,perm);
+                BTreeEntry page = it.next();
+                BTreePageId leftId = page.getLeftChild();
+                logger.debug(String.format("Left id: %s, right id: %s", page.getLeftChild(), page.getRightChild()));
+                BTreeLeafPage leftPage = (BTreeLeafPage) getPage(tid, dirtypages, leftId, perm);
+                return leftPage;
             } else {
+                logger.error("Not found leaf page");
                 return null;
             }
 
         } catch (IOException e) {
             e.printStackTrace();
         }
-
 
         return null;
     }
@@ -277,8 +283,31 @@ public class BTreeFile implements DbFile {
         // the new entry.  getParentWithEmtpySlots() will be useful here.  Don't forget to update
         // the sibling pointers of all the affected leaf pages.  Return the page into which a
         // tuple with the given key field should be inserted.
-        return null;
 
+        BTreePageId currentId = page.getId();
+        BTreePageId newId = new BTreePageId(currentId.getTableId(),currentId.getPageNumber()+1,BTreePageId.LEAF);
+        int columns = 0;
+        BTreeLeafPage newPage = BTreeUtility.createRandomLeafPage(newId, columns, keyField, 0, 0, 0);
+        int tupleNumber = page.getNumTuples();
+        int moveNumber = tupleNumber / 2;
+        int i = -1;
+        Iterator<Tuple> it = page.iterator();
+        while (it.hasNext()) {
+            Tuple tuple = it.next();
+            i++;
+            if (i < moveNumber) {
+                continue;
+            }
+            newPage.insertTuple(tuple);
+        }
+        logger.debug(String.format("oud page: right: %s, left: %s", page.getRightSiblingId(), page.getLeftSiblingId()));
+        logger.debug(String.format("new page: right: %s, left: %s", newPage.getRightSiblingId(), newPage.getLeftSiblingId()));
+        newPage.setLeftSiblingId(currentId);
+        newPage.setRightSiblingId(page.getRightSiblingId());
+        page.setLeftSiblingId(newId);
+        logger.debug(String.format("oud page: right: %s, left: %s", page.getRightSiblingId(), page.getLeftSiblingId()));
+        logger.debug(String.format("new page: right: %s, left: %s", newPage.getRightSiblingId(), newPage.getLeftSiblingId()));
+        return newPage;
     }
 
     /**
@@ -314,6 +343,7 @@ public class BTreeFile implements DbFile {
         // the parent pointers of all the children moving to the new page.  updateParentPointers()
         // will be useful here.  Return the page into which an entry with the given key field
         // should be inserted.
+        logger.error("Not implement");
         return null;
     }
 
@@ -597,6 +627,7 @@ public class BTreeFile implements DbFile {
         // Move some of the tuples from the sibling to the page so
         // that the tuples are evenly distributed. Be sure to update
         // the corresponding parent entry.
+        logger.error("Not implement");
     }
 
     /**
@@ -672,6 +703,7 @@ public class BTreeFile implements DbFile {
         // that the entries are evenly distributed. Be sure to update
         // the corresponding parent entry. Be sure to update the parent
         // pointers of all children in the entries that were moved.
+        logger.error("Not implement");
     }
 
     /**
@@ -699,6 +731,7 @@ public class BTreeFile implements DbFile {
         // that the entries are evenly distributed. Be sure to update
         // the corresponding parent entry. Be sure to update the parent
         // pointers of all children in the entries that were moved.
+        logger.error("Not implement");
     }
 
     /**
@@ -728,6 +761,7 @@ public class BTreeFile implements DbFile {
         // the sibling pointers, and make the right page available for reuse.
         // Delete the entry in the parent corresponding to the two pages that are merging -
         // deleteParentEntry() will be useful here
+        logger.error("Not implement");
     }
 
     /**
@@ -760,6 +794,7 @@ public class BTreeFile implements DbFile {
         // and make the right page available for reuse
         // Delete the entry in the parent corresponding to the two pages that are merging -
         // deleteParentEntry() will be useful here
+        logger.error("Not implement");
     }
 
     /**
