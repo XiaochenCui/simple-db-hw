@@ -152,7 +152,7 @@ public class BTreeFile implements DbFile {
         if (page.getClass() == BTreeRootPtrPage.class) {
             logger.info(String.format("[write page][rootptr page] root id: %s, header id: %s", ((BTreeRootPtrPage) page).getRootId(), ((BTreeRootPtrPage) page).getHeaderId()));
         } else if (page.getClass() == BTreeLeafPage.class) {
-            logger.info(String.format("[write page][leaf page] left id: %s, right id: %s, number of tuples: %s", ((BTreeLeafPage)page).getLeftSiblingId(), ((BTreeLeafPage) page).getRightSiblingId(), ((BTreeLeafPage) page).getNumTuples()));
+            logger.info(String.format("[write page][leaf page] left id: %s, right id: %s, number of tuples: %s", ((BTreeLeafPage) page).getLeftSiblingId(), ((BTreeLeafPage) page).getRightSiblingId(), ((BTreeLeafPage) page).getNumTuples()));
         } else if (page.getClass() == BTreeInternalPage.class) {
             int num = ((BTreeInternalPage) page).getNumEntries();
             for (int i = 0; i < num; i++) {
@@ -210,30 +210,22 @@ public class BTreeFile implements DbFile {
                                        Field f)
             throws DbException, TransactionAbortedException {
         // some code goes here
+        BTreeInternalPage page = (BTreeInternalPage) getPage(tid, dirtypages, pid, perm);
+        BTreeInternalPageIterator entryIt = new BTreeInternalPageIterator(page);
+        BTreePageId leafId = null;
 
-        try {
-            BTreeRootPtrPage rootPtrPage = getRootPtrPage(tid,dirtypages);
-
-            BTreePageId rootPageId = rootPtrPage.getRootId();
-            BTreeInternalPage rootPage = (BTreeInternalPage) getPage(tid,dirtypages,rootPageId,perm);
-
-            BTreeInternalPageIterator it = new BTreeInternalPageIterator(rootPage);
-            if (it.hasNext()) {
-                BTreeEntry page = it.next();
-                BTreePageId leftId = page.getLeftChild();
-                logger.debug(String.format("Left id: %s, right id: %s", page.getLeftChild(), page.getRightChild()));
-                BTreeLeafPage leftPage = (BTreeLeafPage) getPage(tid, dirtypages, leftId, perm);
-                return leftPage;
-            } else {
-                logger.error("Not found leaf page");
-                return null;
+        while (entryIt.hasNext()) {
+            BTreeEntry entry = entryIt.next();
+            if (entry.getKey().compare(Op.GREATER_THAN, f)) {
+                leafId = entry.getLeftChild();
+                break;
+            } else if (entry.getKey().compare(Op.EQUALS, f)) {
+                leafId = entry.getRightChild();
+                break;
             }
-
-        } catch (IOException e) {
-            e.printStackTrace();
         }
 
-        return null;
+        return (BTreeLeafPage) getPage(tid, dirtypages, leafId, perm);
     }
 
     /**
@@ -283,31 +275,61 @@ public class BTreeFile implements DbFile {
         // the new entry.  getParentWithEmtpySlots() will be useful here.  Don't forget to update
         // the sibling pointers of all the affected leaf pages.  Return the page into which a
         // tuple with the given key field should be inserted.
+        BTreePageId parentId = page.getParentId();
 
         BTreePageId currentId = page.getId();
-        BTreePageId newId = new BTreePageId(currentId.getTableId(),currentId.getPageNumber()+1,BTreePageId.LEAF);
+        BTreeFile bf = BTreeUtility.openBTreeFile(td.numFields(), f, keyField);
+        BTreePageId newId = new BTreePageId(tableid, bf.numPages() + 1, BTreePageId.LEAF);
         int columns = 0;
-        BTreeLeafPage newPage = BTreeUtility.createRandomLeafPage(newId, columns, keyField, 0, 0, 0);
+
+        byte pageBuf[] = new byte[BufferPool.getPageSize()];
+        BTreeLeafPage newPage = new BTreeLeafPage(newId, pageBuf, keyField);
+        writePage(newPage);
+
         int tupleNumber = page.getNumTuples();
         int moveNumber = tupleNumber / 2;
         int i = -1;
         Iterator<Tuple> it = page.iterator();
+        Field key = null;
+        BTreeInternalPage newParent = null;
         while (it.hasNext()) {
             Tuple tuple = it.next();
             i++;
             if (i < moveNumber) {
                 continue;
             }
+            if (i == moveNumber) {
+                key = tuple.getField(keyField);
+                newParent = getParentWithEmptySlots(tid, dirtypages, parentId, key);
+            }
+            page.deleteTuple(tuple);
             newPage.insertTuple(tuple);
         }
-        logger.debug(String.format("oud page: right: %s, left: %s", page.getRightSiblingId(), page.getLeftSiblingId()));
-        logger.debug(String.format("new page: right: %s, left: %s", newPage.getRightSiblingId(), newPage.getLeftSiblingId()));
+        if (newParent == null) {
+            throw new DbException("New parent is null");
+        }
+        page.setParentId(newParent.getId());
+        newPage.setParentId(newParent.getId());
+
+        BTreeLeafPage rightPage = (BTreeLeafPage) getPage(tid, dirtypages, page.getRightSiblingId(), Permissions.READ_WRITE);
+        logger.debug(String.format("old page: left: %s, right: %s", page.getLeftSiblingId(), page.getRightSiblingId()));
+        logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
         newPage.setLeftSiblingId(currentId);
         newPage.setRightSiblingId(page.getRightSiblingId());
-        page.setLeftSiblingId(newId);
-        logger.debug(String.format("oud page: right: %s, left: %s", page.getRightSiblingId(), page.getLeftSiblingId()));
-        logger.debug(String.format("new page: right: %s, left: %s", newPage.getRightSiblingId(), newPage.getLeftSiblingId()));
-        return newPage;
+        page.setRightSiblingId(newId);
+        rightPage.setLeftSiblingId(newId);
+        logger.debug(String.format("old page: left: %s, right: %s", page.getLeftSiblingId(), page.getRightSiblingId()));
+        logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
+
+        writePage(page);
+        writePage(newPage);
+        writePage(newParent);
+
+        if (field.compare(Op.LESS_THAN, key)) {
+            return page;
+        } else {
+            return newPage;
+        }
     }
 
     /**
@@ -343,8 +365,53 @@ public class BTreeFile implements DbFile {
         // the parent pointers of all the children moving to the new page.  updateParentPointers()
         // will be useful here.  Return the page into which an entry with the given key field
         // should be inserted.
-        logger.error("Not implement");
-        return null;
+        if (page.getNumEmptySlots() > 0) {
+            return page;
+        }
+
+        BTreeFile bf = BTreeUtility.openBTreeFile(td.numFields(), f, keyField);
+        BTreePageId newId = new BTreePageId(tableid, bf.numPages() + 1, BTreePageId.INTERNAL);
+
+        byte[] pageBuf = new byte[BufferPool.getPageSize()];
+        BTreeInternalPage newPage = new BTreeInternalPage(newId, pageBuf, keyField);
+
+        BTreePageId parentId = page.getParentId();
+        Page parentPage = getPage(tid, dirtypages, parentId, Permissions.READ_ONLY);
+
+        int totalEntries = page.getNumEntries();
+        int moveEntries = totalEntries / 2;
+        int i = -1;
+        BTreeInternalPageIterator entryIt = new BTreeInternalPageIterator(page);
+        Field key = null;
+        while (entryIt.hasNext()) {
+            BTreeEntry entry = entryIt.next();
+            i++;
+            if (i < moveEntries) {
+                continue;
+            }
+            if (i == moveEntries) {
+                key = entry.getKey();
+            }
+
+            // Delete entry first, since the insert action will modify entry object
+            page.deleteKeyAndRightChild(entry);
+            newPage.insertEntry(entry);
+        }
+
+        if (parentPage != null) {
+            parentPage = splitInternalPage(tid, dirtypages, page, key);
+        }
+        page.setParentId((BTreePageId) parentPage.getId());
+        newPage.setParentId((BTreePageId) parentPage.getId());
+
+        writePage(page);
+        writePage(newPage);
+
+        if (field.compare(Op.LESS_THAN, key)) {
+            return page;
+        } else {
+            return newPage;
+        }
     }
 
     /**

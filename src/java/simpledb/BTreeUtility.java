@@ -4,6 +4,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -12,12 +13,15 @@ import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 
+import org.apache.log4j.Logger;
 import simpledb.Predicate.Op;
 
 /**
  * Helper methods used for testing and implementing random features.
  */
 public class BTreeUtility {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     public static final int MAX_RAND_VALUE = 1 << 16;
 

@@ -1,8 +1,10 @@
 package simpledb;
 
 import java.io.*;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
+import org.apache.log4j.Logger;
 import simpledb.Predicate.Op;
 
 /**
@@ -12,6 +14,8 @@ import simpledb.Predicate.Op;
  */
 
 public class BTreeFileEncoder {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     /**
      * Encode the file using the BTreeFile's Insert method.
@@ -237,6 +241,7 @@ public class BTreeFileEncoder {
         // first add some bytes for the root pointer page
         bf.writePage(new BTreeRootPtrPage(BTreeRootPtrPage.getId(tableid),
                 BTreeRootPtrPage.createEmptyPageData()));
+        logger.debug("Write rootptr finished");
 
         // next iterate through all the tuples and write out leaf pages
         // and internal pages as they fill up.
@@ -270,6 +275,7 @@ public class BTreeFileEncoder {
                 page2.add(tup);
             }
         }
+        logger.debug("Write leaves finished");
 
         // now we need to deal with the end cases. There are two options:
         // 1. We have less than or equal to a full page of records. Because of the way the code
@@ -313,6 +319,7 @@ public class BTreeFileEncoder {
             updateEntries(entries, bf, copyUpEntry, 0, nentries, npagebytes,
                     keyType, tableid, keyField);
         }
+        logger.debug("write remainders");
 
         // Write out the remaining internal pages
         cleanUpEntries(entries, bf, nentries, npagebytes, keyType, tableid, keyField);

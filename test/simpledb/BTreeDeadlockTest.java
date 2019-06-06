@@ -1,15 +1,20 @@
 package simpledb;
 
+import org.apache.log4j.Logger;
 import simpledb.Predicate.Op;
 import simpledb.BTreeUtility.*;
 import simpledb.systemtest.SimpleDbTestBase;
 
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 import org.junit.Before;
 import org.junit.Test;
 import junit.framework.JUnit4TestAdapter;
 
 public class BTreeDeadlockTest extends SimpleDbTestBase {
+
+	final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
 	private Random rand;
 
 	private static final int POLL_INTERVAL = 100;
@@ -102,12 +107,14 @@ public class BTreeDeadlockTest extends SimpleDbTestBase {
 
 		// allow read locks to acquire
 		Thread.sleep(POLL_INTERVAL);
-		
+
 		BTreeWriter writer1 = startWriter(tid1, item1, count1);
 		BTreeWriter writer2 = startWriter(tid2, item2, count2);
 
 		while (true) {
 			Thread.sleep(POLL_INTERVAL);
+
+			logger.info(String.format("writer1.succeeded: %s, writer2.succeeded: %s",writer1.succeeded(), writer2.succeeded()));
 
 			if(writer1.succeeded() || writer2.succeeded()) break;
 

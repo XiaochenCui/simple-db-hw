@@ -35,6 +35,8 @@ public class ConcurrentStatus {
         return _instance.get().graph;
     }
 
+    private static final boolean showStatus = false;
+
     /**
      * Acquire a s/x globalLock on a page
      */
@@ -193,10 +195,12 @@ public class ConcurrentStatus {
     }
 
     public synchronized static void showStatus() {
-        globalLock.lock();
-        logger.debug("sLockMap: " + sLockMap);
-        logger.debug("xLockMap: " + xLockMap);
-        logger.debug("holdPages: " + holdPages);
-        globalLock.unlock();
+        if (showStatus) {
+            globalLock.lock();
+            logger.debug("sLockMap: " + sLockMap);
+            logger.debug("xLockMap: " + xLockMap);
+            logger.debug("holdPages: " + holdPages);
+            globalLock.unlock();
+        }
     }
 }
