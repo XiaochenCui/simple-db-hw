@@ -214,8 +214,9 @@ public class BTreeFile implements DbFile {
         BTreeInternalPageIterator entryIt = new BTreeInternalPageIterator(page);
         BTreePageId leafId = null;
 
+        BTreeEntry entry = null;
         while (entryIt.hasNext()) {
-            BTreeEntry entry = entryIt.next();
+            entry = entryIt.next();
             if (entry.getKey().compare(Op.GREATER_THAN, f)) {
                 leafId = entry.getLeftChild();
                 break;
@@ -374,9 +375,23 @@ public class BTreeFile implements DbFile {
 
         byte[] pageBuf = new byte[BufferPool.getPageSize()];
         BTreeInternalPage newPage = new BTreeInternalPage(newId, pageBuf, keyField);
+        writePage(newPage);
 
         BTreePageId parentId = page.getParentId();
-        Page parentPage = getPage(tid, dirtypages, parentId, Permissions.READ_ONLY);
+
+        BTreeInternalPage parentPage;
+        if (parentId.pgcateg() == BTreePageId.ROOT_PTR) {
+            // create new parent page if the parent page is root_ptr page
+            newId = new BTreePageId(tableid, bf.numPages() + 1, BTreePageId.INTERNAL);
+            parentPage = new BTreeInternalPage(newId, pageBuf, keyField);
+            writePage(parentPage);
+
+            // update root_ptr page
+            BTreeRootPtrPage rootPtrPage = getRootPtrPage(tid, dirtypages);
+            rootPtrPage.setRootId(newId);
+        } else {
+            parentPage = (BTreeInternalPage) getPage(tid, dirtypages, parentId, Permissions.READ_ONLY);
+        }
 
         int totalEntries = page.getNumEntries();
         int moveEntries = totalEntries / 2;
@@ -399,13 +414,18 @@ public class BTreeFile implements DbFile {
         }
 
         if (parentPage != null) {
-            parentPage = splitInternalPage(tid, dirtypages, page, key);
+            parentPage = splitInternalPage(tid, dirtypages, parentPage, key);
         }
         page.setParentId((BTreePageId) parentPage.getId());
         newPage.setParentId((BTreePageId) parentPage.getId());
 
+        // insert entry to parent page
+        BTreeEntry entry = new BTreeEntry(key,page.getId(),newPage.getId());
+        parentPage.insertEntry(entry);
+
         writePage(page);
         writePage(newPage);
+        writePage(parentPage);
 
         if (field.compare(Op.LESS_THAN, key)) {
             return page;

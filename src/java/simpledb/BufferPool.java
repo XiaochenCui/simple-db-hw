@@ -105,6 +105,7 @@ public class BufferPool {
         }
 
         Page page = this.buffer.get(pid);
+
         if (page == null) {
             DbFile f = Database.getCatalog().getDatabaseFile(pid.getTableId());
             logger.debug(String.format("Read page %s from %s", pid, f.getFile()));
