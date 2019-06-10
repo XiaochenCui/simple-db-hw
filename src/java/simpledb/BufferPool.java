@@ -109,9 +109,6 @@ public class BufferPool {
         if (page == null) {
             DbFile f = Database.getCatalog().getDatabaseFile(pid.getTableId());
             logger.debug(String.format("Read page %s from %s", pid, f.getFile()));
-            if (f.getClass() == BTreeFile.class) {
-                logger.debug("hi");
-            }
             page = f.readPage(pid);
 
             // evict page
