@@ -12,3 +12,5 @@ log
 *.iml
 
 *.log
+
+out
