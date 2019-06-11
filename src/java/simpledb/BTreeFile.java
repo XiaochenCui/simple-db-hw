@@ -218,6 +218,11 @@ public class BTreeFile implements DbFile {
         BTreeInternalPageIterator entryIt = new BTreeInternalPageIterator(page);
         BTreePageId childId = null;
 
+        if (f == null) {
+            childId = page.getChildId(0);
+            return findLeafPage(tid, dirtypages, childId, Permissions.READ_ONLY, f);
+        }
+
         BTreeEntry entry = null;
         while (entryIt.hasNext()) {
             entry = entryIt.next();
