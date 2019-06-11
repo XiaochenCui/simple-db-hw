@@ -286,14 +286,8 @@ public class BTreeFile implements DbFile {
         // tuple with the given key field should be inserted.
         BTreePageId parentId = page.getParentId();
 
-        BTreePageId currentId = page.getId();
-        BTreeFile bf = BTreeUtility.openBTreeFile(td.numFields(), f, keyField);
-        BTreePageId newId = new BTreePageId(tableid, bf.numPages() + 1, BTreePageId.LEAF);
-
-        byte[] pageBuf = new byte[BufferPool.getPageSize()];
-        BTreeLeafPage newPage = new BTreeLeafPage(newId, pageBuf, keyField);
-        writePage(newPage);
-        dirtypages.put(newId, newPage);
+        BTreeLeafPage newPage = (BTreeLeafPage) getEmptyPage(tid, dirtypages, BTreePageId.LEAF);
+        dirtypages.put(newPage.getId(),newPage);
 
         int tupleNumber = page.getNumTuples();
         int moveNumber = tupleNumber / 2;
@@ -325,11 +319,11 @@ public class BTreeFile implements DbFile {
         logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
         if (page.getRightSiblingId() != null) {
             BTreeLeafPage rightPage = (BTreeLeafPage) getPage(tid, dirtypages, page.getRightSiblingId(), Permissions.READ_WRITE);
-            rightPage.setLeftSiblingId(newId);
+            rightPage.setLeftSiblingId(newPage.getId());
         }
-        newPage.setLeftSiblingId(currentId);
+        newPage.setLeftSiblingId(page.getId());
         newPage.setRightSiblingId(page.getRightSiblingId());
-        page.setRightSiblingId(newId);
+        page.setRightSiblingId(newPage.getId());
         logger.debug(String.format("old page: left: %s, right: %s", page.getLeftSiblingId(), page.getRightSiblingId()));
         logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
 
@@ -382,24 +376,20 @@ public class BTreeFile implements DbFile {
         }
 
         BTreeFile bf = BTreeUtility.openBTreeFile(td.numFields(), f, keyField);
-        BTreePageId newId = new BTreePageId(tableid, bf.numPages() + 1, BTreePageId.INTERNAL);
 
-        byte[] pageBuf = new byte[BufferPool.getPageSize()];
-        BTreeInternalPage newPage = new BTreeInternalPage(newId, pageBuf, keyField);
-        writePage(newPage);
+        BTreeInternalPage newPage = (BTreeInternalPage) getEmptyPage(tid, dirtypages, BTreePageId.INTERNAL);
+        dirtypages.put(newPage.getId(), newPage);
 
         BTreePageId parentId = page.getParentId();
 
         BTreeInternalPage parentPage;
         if (parentId.pgcateg() == BTreePageId.ROOT_PTR) {
             // create new parent page if the parent page is root_ptr page
-            newId = new BTreePageId(tableid, bf.numPages() + 1, BTreePageId.INTERNAL);
-            parentPage = new BTreeInternalPage(newId, pageBuf, keyField);
-            writePage(parentPage);
+            parentPage = (BTreeInternalPage) getEmptyPage(tid, dirtypages, BTreePageId.INTERNAL);
 
             // update root_ptr page
             BTreeRootPtrPage rootPtrPage = getRootPtrPage(tid, dirtypages);
-            rootPtrPage.setRootId(newId);
+            rootPtrPage.setRootId(parentPage.getId());
         } else {
             parentPage = (BTreeInternalPage) getPage(tid, dirtypages, parentId, Permissions.READ_ONLY);
         }
@@ -426,7 +416,7 @@ public class BTreeFile implements DbFile {
         newPage.setParentId(parentPage.getId());
 
         // insert entry to parent page
-        entry = new BTreeEntry(key, page.getId(), newPage.getId());
+        entry = new BTreeEntry(key, newPage.getId(), page.getId());
         parentPage.insertEntry(entry);
 
         writePage(page);
@@ -434,9 +424,9 @@ public class BTreeFile implements DbFile {
         writePage(parentPage);
 
         if (field.compare(Op.LESS_THAN, key)) {
-            return page;
-        } else {
             return newPage;
+        } else {
+            return page;
         }
     }
 
