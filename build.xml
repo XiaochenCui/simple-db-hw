@@ -37,6 +37,8 @@
         <pathelement location="${lib}/junit-4.5.jar"/>
         <pathelement location="${lib}/javassist-3.16.1-GA.jar"/>
     </path>
+    <echo>${toString:classpath.base}</echo>
+    <echo>${build.test}</echo>
     <echo>${toString:classpath.test}</echo>
     <!-- Common macro for compiling Java source -->
     <macrodef name="Compile">
@@ -59,6 +61,7 @@
     <!-- Common macro for running junit tests in both the test and runtest targets -->
     <macrodef name="RunJunit">
         <attribute name="haltonfailure" default="yes" />
+        <attribute name="haltonerror" default="yes" />
         <element name="testspecification" implicit="yes" />
         <sequential>
             <!-- timeout at 10.5 minutes, since TransactionTest is limited to 10 minutes. -->
