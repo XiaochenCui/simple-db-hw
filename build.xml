@@ -37,6 +37,7 @@
         <pathelement location="${lib}/junit-4.5.jar"/>
         <pathelement location="${lib}/javassist-3.16.1-GA.jar"/>
     </path>
+    <echo>${toString:classpath.test}</echo>
     <!-- Common macro for compiling Java source -->
     <macrodef name="Compile">
         <attribute name="srcdir"/>
