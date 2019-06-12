@@ -744,12 +744,10 @@ public class BTreeFile implements DbFile {
             key = tuple;
         }
 
-
         // update entry
-        if (key == null) {
-            throw new DbException("key is null!");
-        }
         entry.setKey(key.getField(keyField));
+        parent.updateEntry(entry);
+
         return;
     }
 
@@ -845,16 +843,18 @@ public class BTreeFile implements DbFile {
 
             leftSibling.deleteKeyAndRightChild(entry);
 
-            BTreePageId originChildID = entry.getRightChild();
-            BTreeEntry newEntry = new BTreeEntry(lastKey, originChildID, lastChild);
-            lastChild = originChildID;
+            BTreePageId movedChildId = entry.getRightChild();
+            BTreeEntry newEntry = new BTreeEntry(lastKey, movedChildId, lastChild);
+            lastChild = movedChildId;
+            lastKey = entry.getKey();
 
             page.insertEntry(newEntry);
 
-            BTreePage originChild = (BTreePage) getPage(tid, dirtypages, originChildID, Permissions.READ_WRITE);
-            originChild.setParentId(page.getId());
+            BTreePage movedChild = (BTreePage) getPage(tid, dirtypages, movedChildId, Permissions.READ_WRITE);
+            movedChild.setParentId(page.getId());
         }
         parentEntry.setKey(entry.getKey());
+        parent.updateEntry(parentEntry);
     }
 
     /**
@@ -901,16 +901,18 @@ public class BTreeFile implements DbFile {
 
             rightSibling.deleteKeyAndLeftChild(entry);
 
-            BTreePageId originChildID = entry.getLeftChild();
-            BTreeEntry newEntry = new BTreeEntry(lastKey, lastChild, originChildID);
-            lastChild = originChildID;
+            BTreePageId movedChildId = entry.getLeftChild();
+            BTreeEntry newEntry = new BTreeEntry(lastKey, lastChild, movedChildId);
+            lastChild = movedChildId;
+            lastKey = entry.getKey();
 
             page.insertEntry(newEntry);
 
-            BTreePage originChild = (BTreePage) getPage(tid, dirtypages, originChildID, Permissions.READ_WRITE);
-            originChild.setParentId(page.getId());
+            BTreePage movedChild = (BTreePage) getPage(tid, dirtypages, movedChildId, Permissions.READ_WRITE);
+            movedChild.setParentId(page.getId());
         }
         parentEntry.setKey(entry.getKey());
+        parent.updateEntry(parentEntry);
     }
 
     /**
