@@ -44,7 +44,6 @@ public class ConcurrentStatus {
 
         logger.info(String.format("%s try to acquire %s on %s", transactionId, lock, pageId));
 
-
         long startTime = System.currentTimeMillis();
         while ((System.currentTimeMillis() - startTime) < TIMEOUT) {
             if (lock.equals(Lock.SHARED_LOCK)) {

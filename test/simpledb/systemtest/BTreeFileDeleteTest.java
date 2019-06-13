@@ -342,13 +342,6 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 		for(int i = 0; i < 124; ++i) {
 			Database.getBufferPool().deleteTuple(tid, it.next());
 			it.rewind();
-
-			BTreePageId rootPtrId = BTreeRootPtrPage.getId(bigFile.getId());
-			rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
-					tid, rootPtrId, Permissions.READ_ONLY);
-			root = (BTreeInternalPage) Database.getBufferPool().getPage(
-					tid, rootPtr.getRootId(), Permissions.READ_ONLY);
-			logger.debug("root empty slots: " + root.getNumEmptySlots());
 		}
 
 		// confirm that the last two internal pages have merged successfully and 

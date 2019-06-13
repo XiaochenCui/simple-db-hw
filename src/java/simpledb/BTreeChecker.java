@@ -1,6 +1,9 @@
 package simpledb;
 
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.util.HashMap;
 import java.util.Iterator;
 
@@ -8,6 +11,8 @@ import java.util.Iterator;
  * Created by orm on 10/7/15.
  */
 public class BTreeChecker {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     /**
      * This class is only used for error-checking code.
@@ -103,6 +108,7 @@ public class BTreeChecker {
             BTreeEntry curr = prev; // for one entry case.
             while (it.hasNext()) {
                 curr = it.next();
+
                 SubtreeSummary currentSubTreeResult =
                         checkSubTree(bt, tid, dirtypages, curr.getLeftChild(), lowerBound, curr.getKey(), ipage.getId(),
                                 checkOccupancy, depth + 1);

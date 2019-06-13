@@ -405,6 +405,10 @@ public class BTreeInternalPage extends BTreePage {
      *                     order on the page
      */
     public void updateEntry(BTreeEntry e) throws DbException {
+        if (e.getLeftChild().equals(e.getRightChild())) {
+            throw new DbException("left and right is the same");
+        }
+
         RecordId rid = e.getRecordId();
         if (rid == null)
             throw new DbException("tried to update entry with null rid");
@@ -445,6 +449,10 @@ public class BTreeInternalPage extends BTreePage {
      *                     table id, or child page category is a mismatch, or the entry is invalid
      */
     public void insertEntry(BTreeEntry e) throws DbException {
+        if (e.getLeftChild().equals(e.getRightChild())) {
+            throw new DbException("left and right is the same");
+        }
+
         if (!e.getKey().getType().equals(td.getFieldType(keyField)))
             throw new DbException("key field type mismatch, in insertEntry");
 
