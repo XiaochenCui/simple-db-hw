@@ -1,9 +1,11 @@
 package simpledb;
 
+import org.apache.log4j.Logger;
 import simpledb.systemtest.SimpleDbTestBase;
 import simpledb.Predicate.Op;
 
 import java.io.File;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
 import org.junit.After;
@@ -14,6 +16,9 @@ import static org.junit.Assert.*;
 import junit.framework.JUnit4TestAdapter;
 
 public class BTreeFileDeleteTest extends SimpleDbTestBase {
+
+	final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
 	private TransactionId tid;
 
 	/**
@@ -328,7 +333,20 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 				entriesPerPage/2 - 1, 0, BTreeUtility.MAX_RAND_VALUE/2, 3 + entriesPerPage);
 		BTreeInternalPage rightPage = BTreeUtility.createRandomInternalPage(rightPageId, keyField, BTreePageId.LEAF,
 				entriesPerPage/2 - 1, BTreeUtility.MAX_RAND_VALUE/2, BTreeUtility.MAX_RAND_VALUE, 2 + 3*entriesPerPage/2);
-		
+
+		logger.debug("left children:");
+		BTreeInternalPageIterator tmpIt = new BTreeInternalPageIterator(leftPage);
+		while (tmpIt.hasNext()) {
+			logger.debug(tmpIt.next());
+		}
+		logger.debug("left children end");
+		logger.debug("right children:");
+		tmpIt = new BTreeInternalPageIterator(rightPage);
+		while (tmpIt.hasNext()) {
+			logger.debug(tmpIt.next());
+		}
+		logger.debug("right children end");
+
 		// create the parent page and the new entry
 		BTreePageId parentId = new BTreePageId(tableid, 1, BTreePageId.INTERNAL);
 		BTreeInternalPage parent = BTreeUtility.createRandomInternalPage(parentId, keyField, 
@@ -344,7 +362,20 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 		// set all the pointers
 		leftPage.setParentId(parentId);
 		rightPage.setParentId(parentId);
-		
+
+		logger.debug("left children:");
+		tmpIt = new BTreeInternalPageIterator(leftPage);
+		while (tmpIt.hasNext()) {
+			logger.debug(tmpIt.next());
+		}
+		logger.debug("left children end");
+		logger.debug("right children:");
+		tmpIt = new BTreeInternalPageIterator(rightPage);
+		while (tmpIt.hasNext()) {
+			logger.debug(tmpIt.next());
+		}
+		logger.debug("right children end");
+
 		int totalEntries = leftPage.getNumEntries() + rightPage.getNumEntries();
 		
 		HashMap<PageId, Page> dirtypages = new HashMap<PageId, Page>();

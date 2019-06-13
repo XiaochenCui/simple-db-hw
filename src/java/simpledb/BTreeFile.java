@@ -1359,25 +1359,29 @@ public class BTreeFile implements DbFile {
         BTreePageId rightId = entry.getRightChild();
         Field key = entry.getKey();
 
-        if (leftId.pgcateg() == BTreePageId.LEAF) {
-            BTreeLeafPage left = (BTreeLeafPage) getPage(tid, dirtypages, leftId, Permissions.READ_ONLY);
-            BTreeLeafPageIterator newit = new BTreeLeafPageIterator(left);
-            Field leftLower = newit.next().getField(0);
-            BTreeLeafPageReverseIterator newit1 = new BTreeLeafPageReverseIterator(left);
-            Field leftUpper = newit1.next().getField(0);
+        try {
+            if (leftId.pgcateg() == BTreePageId.LEAF) {
+                BTreeLeafPage left = (BTreeLeafPage) getPage(tid, dirtypages, leftId, Permissions.READ_ONLY);
+                BTreeLeafPageIterator newit = new BTreeLeafPageIterator(left);
+                Field leftLower = newit.next().getField(0);
+                BTreeLeafPageReverseIterator newit1 = new BTreeLeafPageReverseIterator(left);
+                Field leftUpper = newit1.next().getField(0);
 
-            BTreeLeafPage right = (BTreeLeafPage) getPage(tid, dirtypages, rightId, Permissions.READ_ONLY);
-            BTreeLeafPageIterator newit2 = new BTreeLeafPageIterator(right);
-            Field rightLower = newit2.next().getField(0);
-            BTreeLeafPageReverseIterator newit3 = new BTreeLeafPageReverseIterator(right);
-            Field rightUpper = newit3.next().getField(0);
+                BTreeLeafPage right = (BTreeLeafPage) getPage(tid, dirtypages, rightId, Permissions.READ_ONLY);
+                BTreeLeafPageIterator newit2 = new BTreeLeafPageIterator(right);
+                Field rightLower = newit2.next().getField(0);
+                BTreeLeafPageReverseIterator newit3 = new BTreeLeafPageReverseIterator(right);
+                Field rightUpper = newit3.next().getField(0);
 
-            logger.debug(String.format("entry debug: [%s(%s,%s)|%s|(%s,%s)%s]", leftId, leftLower, leftUpper, key, rightLower, rightUpper, rightId));
+                logger.debug(String.format("entry debug: [%s(%s,%s)|%s|(%s,%s)%s]", leftId, leftLower, leftUpper, key, rightLower, rightUpper, rightId));
 
-            assert leftLower.compare(Op.LESS_THAN_OR_EQ, leftUpper);
-            assert leftUpper.compare(Op.LESS_THAN_OR_EQ, key);
-            assert key.compare(Op.LESS_THAN_OR_EQ, rightLower);
-            assert rightLower.compare(Op.LESS_THAN_OR_EQ, rightUpper);
+                assert leftLower.compare(Op.LESS_THAN_OR_EQ, leftUpper);
+                assert leftUpper.compare(Op.LESS_THAN_OR_EQ, key);
+                assert key.compare(Op.LESS_THAN_OR_EQ, rightLower);
+                assert rightLower.compare(Op.LESS_THAN_OR_EQ, rightUpper);
+            }
+        } catch (NoSuchElementException e) {
+            logger.error(e);
         }
 
         parent.insertEntry(entry);
