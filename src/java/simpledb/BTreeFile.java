@@ -226,11 +226,8 @@ public class BTreeFile implements DbFile {
         BTreeEntry entry = null;
         while (entryIt.hasNext()) {
             entry = entryIt.next();
-            if (entry.getKey().compare(Op.GREATER_THAN, f)) {
+            if (entry.getKey().compare(Op.GREATER_THAN_OR_EQ, f)) {
                 childId = entry.getLeftChild();
-                break;
-            } else if (entry.getKey().compare(Op.EQUALS, f)) {
-                childId = entry.getRightChild();
                 break;
             }
         }

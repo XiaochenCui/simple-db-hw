@@ -493,6 +493,24 @@ public class BTreeLeafPage extends BTreePage {
         return new BTreeLeafPageReverseIterator(this);
     }
 
+    public Tuple firstTuple() {
+        BTreeLeafPageIterator it = new BTreeLeafPageIterator(this);
+        if (it.hasNext()) {
+            return it.next();
+        } else {
+            return null;
+        }
+    }
+
+    public Tuple lastTuple() {
+        BTreeLeafPageReverseIterator it = new BTreeLeafPageReverseIterator(this);
+        if (it.hasNext()) {
+            return it.next();
+        } else {
+            return null;
+        }
+    }
+
     /**
      * protected method used by the iterator to get the ith tuple out of this page
      *
