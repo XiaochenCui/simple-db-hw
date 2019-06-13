@@ -835,7 +835,9 @@ public class BTreeFile implements DbFile {
         BTreeInternalPageReverseIterator it = new BTreeInternalPageReverseIterator(leftSibling);
         BTreeEntry entry = null;
 
-        BTreePageId lastChild = page.getChildId(0);
+        BTreeInternalPageIterator pageIt = new BTreeInternalPageIterator(page);
+        BTreeEntry edgeEntry = pageIt.next();
+        BTreePageId edgeChildId = edgeEntry.getLeftChild();
         Field lastKey = parentEntry.getKey();
 
         for (int i = 0; i < moveEntries; i++) {
@@ -844,8 +846,8 @@ public class BTreeFile implements DbFile {
             leftSibling.deleteKeyAndRightChild(entry);
 
             BTreePageId movedChildId = entry.getRightChild();
-            BTreeEntry newEntry = new BTreeEntry(lastKey, movedChildId, lastChild);
-            lastChild = movedChildId;
+            BTreeEntry newEntry = new BTreeEntry(lastKey, movedChildId, edgeChildId);
+            edgeChildId = movedChildId;
             lastKey = entry.getKey();
 
             page.insertEntry(newEntry);
@@ -893,7 +895,9 @@ public class BTreeFile implements DbFile {
         BTreeInternalPageIterator it = new BTreeInternalPageIterator(rightSibling);
         BTreeEntry entry = null;
 
-        BTreePageId lastChild = page.getChildId(page.getNumEntries());
+        BTreeInternalPageReverseIterator pageIt = new BTreeInternalPageReverseIterator(page);
+        BTreeEntry edgeEntry = pageIt.next();
+        BTreePageId edgeChildId = edgeEntry.getRightChild();
         Field lastKey = parentEntry.getKey();
 
         for (int i = 0; i < moveEntries; i++) {
@@ -902,8 +906,8 @@ public class BTreeFile implements DbFile {
             rightSibling.deleteKeyAndLeftChild(entry);
 
             BTreePageId movedChildId = entry.getLeftChild();
-            BTreeEntry newEntry = new BTreeEntry(lastKey, lastChild, movedChildId);
-            lastChild = movedChildId;
+            BTreeEntry newEntry = new BTreeEntry(lastKey, edgeChildId, movedChildId);
+            edgeChildId = movedChildId;
             lastKey = entry.getKey();
 
             page.insertEntry(newEntry);
@@ -942,9 +946,9 @@ public class BTreeFile implements DbFile {
         // the sibling pointers, and make the right page available for reuse.
         // Delete the entry in the parent corresponding to the two pages that are merging -
         // deleteParentEntry() will be useful here
-        BTreeLeafPageIterator it = new BTreeLeafPageIterator(rightPage);
-        while (it.hasNext()) {
-            Tuple tuple = it.next();
+        BTreeLeafPageIterator rightIt = new BTreeLeafPageIterator(rightPage);
+        while (rightIt.hasNext()) {
+            Tuple tuple = rightIt.next();
             rightPage.deleteTuple(tuple);
             leftPage.insertTuple(tuple);
         }
@@ -991,34 +995,45 @@ public class BTreeFile implements DbFile {
         // and make the right page available for reuse
         // Delete the entry in the parent corresponding to the two pages that are merging -
         // deleteParentEntry() will be useful here
-        BTreeInternalPageIterator it = new BTreeInternalPageIterator(rightPage);
+        BTreeInternalPageIterator rightIt = new BTreeInternalPageIterator(rightPage);
         BTreeEntry entry = null;
 
-        BTreePageId lastChild = leftPage.getChildId(leftPage.getNumEntries());
         Field lastKey = parentEntry.getKey();
 
-        BTreePageId originChildID = rightPage.getChildId(0);
-        BTreeEntry newEntry = new BTreeEntry(lastKey, lastChild, originChildID);
+        BTreeInternalPageReverseIterator leftIt = new BTreeInternalPageReverseIterator(leftPage);
+        BTreePageId lastChildId = leftIt.next().getRightChild();
+
+        entry = rightIt.next();
+        BTreePageId movedChildID = entry.getLeftChild();
+
+        BTreeEntry newEntry = new BTreeEntry(lastKey, lastChildId, movedChildID);
         leftPage.insertEntry(newEntry);
-        lastChild = originChildID;
+        lastChildId = movedChildID;
+        lastKey = entry.getKey();
 
-        while (it.hasNext()) {
-            entry = it.next();
-
+        rightIt = new BTreeInternalPageIterator(rightPage);
+        while (rightIt.hasNext()) {
+            entry = rightIt.next();
             rightPage.deleteKeyAndRightChild(entry);
+            movedChildID = entry.getLeftChild();
 
-            originChildID = entry.getRightChild();
-            newEntry = new BTreeEntry(lastKey, lastChild, originChildID);
+            newEntry = new BTreeEntry(lastKey, lastChildId, movedChildID);
             leftPage.insertEntry(newEntry);
+            lastChildId = movedChildID;
+            lastKey = entry.getKey();
 
-            lastChild = originChildID;
-
-            BTreePage originChild = (BTreePage) getPage(tid, dirtypages, originChildID, Permissions.READ_WRITE);
-            originChild.setParentId(leftPage.getId());
+            BTreePage movedChild = (BTreePage) getPage(tid, dirtypages, movedChildID, Permissions.READ_WRITE);
+            movedChild.setParentId(leftPage.getId());
         }
 
         deleteParentEntry(tid, dirtypages, leftPage, parent, parentEntry);
         setEmptyPage(tid, dirtypages, rightPage.getId().getPageNumber());
+
+        if (parent.getNumEntries() == 0) {
+            setEmptyPage(tid,dirtypages,parent.getId().getPageNumber());
+            BTreeRootPtrPage rootPtrPage = getRootPtrPage(tid, dirtypages);
+            rootPtrPage.setRootId(leftPage.getId());
+        }
     }
 
     /**

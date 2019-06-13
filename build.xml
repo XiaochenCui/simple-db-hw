@@ -227,6 +227,7 @@
                     <include name="**/*Test.class"/>
                     <exclude name="**/*$*.class"/>
                     <exclude name="simpledb/systemtest/*.class"/>
+                    <exclude name="test/simpledb/systemtest/*.class"/>
                 </fileset>
             </batchtest>
         </RunJunit>

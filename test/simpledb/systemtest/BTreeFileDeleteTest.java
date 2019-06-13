@@ -1,9 +1,11 @@
 package simpledb.systemtest;
 
+import org.apache.log4j.Logger;
 import simpledb.systemtest.SimpleDbTestBase;
 import simpledb.Predicate.Op;
 import simpledb.*;
 
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
 import org.junit.After;
@@ -14,6 +16,9 @@ import static org.junit.Assert.*;
 import junit.framework.JUnit4TestAdapter;
 
 public class BTreeFileDeleteTest extends SimpleDbTestBase {
+
+	final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
 	private TransactionId tid;
 
 	/**
@@ -337,6 +342,13 @@ public class BTreeFileDeleteTest extends SimpleDbTestBase {
 		for(int i = 0; i < 124; ++i) {
 			Database.getBufferPool().deleteTuple(tid, it.next());
 			it.rewind();
+
+			BTreePageId rootPtrId = BTreeRootPtrPage.getId(bigFile.getId());
+			rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(
+					tid, rootPtrId, Permissions.READ_ONLY);
+			root = (BTreeInternalPage) Database.getBufferPool().getPage(
+					tid, rootPtr.getRootId(), Permissions.READ_ONLY);
+			logger.debug("root empty slots: " + root.getNumEmptySlots());
 		}
 
 		// confirm that the last two internal pages have merged successfully and 
