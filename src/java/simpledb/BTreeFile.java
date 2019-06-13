@@ -296,25 +296,19 @@ public class BTreeFile implements DbFile {
 
         int tupleNumber = page.getNumTuples();
         int moveNumber = tupleNumber / 2;
-        int i = -1;
         Iterator<Tuple> it = page.iterator();
         Field key = null;
-        BTreeInternalPage newParent = null;
-        while (it.hasNext()) {
-            Tuple tuple = it.next();
-            i++;
-            if (i < moveNumber) {
-                continue;
-            }
-            if (i == moveNumber) {
-                key = tuple.getField(keyField);
-                newParent = getParentWithEmptySlots(tid, dirtypages, parentId, key);
-            }
+
+        Tuple tuple = null;
+        for (int i = 0; i < moveNumber; i++) {
+            tuple = it.next();
             page.deleteTuple(tuple);
             newPage.insertTuple(tuple);
         }
+        key = tuple.getField(keyField);
+
         BTreeInternalPage parent = getParentWithEmptySlots(tid, dirtypages, parentId, key);
-        BTreeEntry entry = new BTreeEntry(key, page.getId(), newPage.getId());
+        BTreeEntry entry = new BTreeEntry(key, newPage.getId(), page.getId());
         insertEntry(tid, dirtypages, parent, entry);
 
         page.setParentId(parent.getId());
@@ -322,24 +316,20 @@ public class BTreeFile implements DbFile {
 
         logger.debug(String.format("old page: left: %s, right: %s", page.getLeftSiblingId(), page.getRightSiblingId()));
         logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
-        if (page.getRightSiblingId() != null) {
-            BTreeLeafPage rightPage = (BTreeLeafPage) getPage(tid, dirtypages, page.getRightSiblingId(), Permissions.READ_WRITE);
-            rightPage.setLeftSiblingId(newPage.getId());
+        if (page.getLeftSiblingId() != null) {
+            BTreeLeafPage leftPage = (BTreeLeafPage) getPage(tid, dirtypages, page.getLeftSiblingId(), Permissions.READ_WRITE);
+            leftPage.setRightSiblingId(newPage.getId());
         }
-        newPage.setLeftSiblingId(page.getId());
-        newPage.setRightSiblingId(page.getRightSiblingId());
-        page.setRightSiblingId(newPage.getId());
+        newPage.setRightSiblingId(page.getId());
+        newPage.setLeftSiblingId(page.getLeftSiblingId());
+        page.setLeftSiblingId(newPage.getId());
         logger.debug(String.format("old page: left: %s, right: %s", page.getLeftSiblingId(), page.getRightSiblingId()));
         logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
 
-        writePage(page);
-        writePage(newPage);
-        writePage(newParent);
-
         if (field.compare(Op.LESS_THAN, key)) {
-            return page;
-        } else {
             return newPage;
+        } else {
+            return page;
         }
     }
 
