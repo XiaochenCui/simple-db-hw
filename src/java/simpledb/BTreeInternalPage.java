@@ -449,9 +449,9 @@ public class BTreeInternalPage extends BTreePage {
      *                     table id, or child page category is a mismatch, or the entry is invalid
      */
     public void insertEntry(BTreeEntry e) throws DbException {
-        if (e.getLeftChild().equals(e.getRightChild())) {
-            throw new DbException("left and right is the same");
-        }
+//        if (e.getLeftChild().equals(e.getRightChild())) {
+//            throw new DbException("left and right is the same");
+//        }
 
         if (!e.getKey().getType().equals(td.getFieldType(keyField)))
             throw new DbException("key field type mismatch, in insertEntry");
