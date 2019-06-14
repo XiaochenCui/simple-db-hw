@@ -1,5 +1,8 @@
 package simpledb;
 
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -93,6 +96,7 @@ public class Tuple implements Serializable {
         String out = "";
         for (Field f: fields) {
             out += f.toString();
+            out += ",";
         }
         return out;
     }
@@ -110,5 +114,21 @@ public class Tuple implements Serializable {
      */
     public void resetTupleDesc(TupleDesc td) {
         // some code goes here
+    }
+
+    public void serializeToFile(String filepath, boolean append) {
+        try {
+            if (append) {
+                FileWriter fileWriter = new FileWriter(filepath, true);
+                String s = this.toString();
+                fileWriter.write(s);
+                fileWriter.write("\n");
+                fileWriter.close();
+            } else {
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

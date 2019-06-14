@@ -42,7 +42,9 @@ public class ConcurrentStatus {
      */
     public static void acquireLock(TransactionId transactionId, PageId pageId, Lock lock) throws TransactionAbortedException {
 
-        logger.info(String.format("%s try to acquire %s on %s", transactionId, lock, pageId));
+        if (Config.debugTransaction()) {
+            logger.info(String.format("%s try to acquire %s on %s", transactionId, lock, pageId));
+        }
 
         long startTime = System.currentTimeMillis();
         while ((System.currentTimeMillis() - startTime) < TIMEOUT) {
@@ -112,16 +114,19 @@ public class ConcurrentStatus {
 
             holdPages.putIfAbsent(transactionId, new HashSet<>());
             holdPages.get(transactionId).add(pageId);
-            logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
-        } else if (lock.equals(Lock.EXCLUSIVE_LOCK)) {
-            if (transactionId.getId() != 0) {
-                logger.debug("");
+
+            if (Config.debugTransaction()) {
+                logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
             }
+        } else if (lock.equals(Lock.EXCLUSIVE_LOCK)) {
             xLockMap.put(pageId, transactionId);
 
             holdPages.putIfAbsent(transactionId, new HashSet<>());
             holdPages.get(transactionId).add(pageId);
-            logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
+
+            if (Config.debugTransaction()) {
+                logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
+            }
         }
 
         globalLock.unlock();
@@ -149,7 +154,9 @@ public class ConcurrentStatus {
     public synchronized static void releaseAllLocks(PageId pageId) {
         globalLock.lock();
 
-        logger.debug(String.format("release all locks on %s", pageId));
+        if (Config.debugTransaction()) {
+            logger.debug(String.format("release all locks on %s", pageId));
+        }
 
         sLockMap.remove(pageId);
         xLockMap.remove(pageId);

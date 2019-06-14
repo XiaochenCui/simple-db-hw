@@ -25,7 +25,10 @@ public class WaitForGraph {
             out = entry.getKey().getId() + " -> " + out + "; ";
             totalOut += out;
         }
-        logger.debug(totalOut);
+
+        if (Config.debugTransaction()) {
+            logger.debug(totalOut);
+        }
     }
 
     public synchronized void addVertex(TransactionId vertex) {

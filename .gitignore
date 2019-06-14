@@ -13,4 +13,4 @@ log
 
 *.log
 
-out
+*out

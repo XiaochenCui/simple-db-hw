@@ -7,6 +7,8 @@ import java.util.*;
 import org.apache.log4j.Logger;
 import simpledb.Predicate.Op;
 
+import javax.swing.*;
+
 /**
  * BTreeFile is an implementation of a DbFile that stores a B+ tree.
  * Specifically, it stores a pointer to a root page,
@@ -148,18 +150,20 @@ public class BTreeFile implements DbFile {
     public void writePage(Page page) throws IOException {
         BTreePageId id = (BTreePageId) page.getId();
 
-        logger.info(String.format("[write page]write page %s, id: %s", page, page.getId()));
-        if (page.getClass() == BTreeRootPtrPage.class) {
-            logger.info(String.format("[write page][rootptr page] root id: %s, header id: %s", ((BTreeRootPtrPage) page).getRootId(), ((BTreeRootPtrPage) page).getHeaderId()));
-        } else if (page.getClass() == BTreeLeafPage.class) {
-            logger.info(String.format("[write page][leaf page] left id: %s, right id: %s, number of tuples: %s", ((BTreeLeafPage) page).getLeftSiblingId(), ((BTreeLeafPage) page).getRightSiblingId(), ((BTreeLeafPage) page).getNumTuples()));
-        } else if (page.getClass() == BTreeInternalPage.class) {
-            int num = ((BTreeInternalPage) page).getNumEntries();
-            for (int i = 0; i < num; i++) {
-                try {
-                    logger.info(String.format("[write page][internal page] key: %s, child id: %s", ((BTreeInternalPage) page).getKey(i), ((BTreeInternalPage) page).getChildId(i)));
-                } catch (NoSuchElementException e) {
-                    logger.error(String.format("[write page][internal page] index: %s", i));
+        if (Config.debugPageWrite()) {
+            logger.info(String.format("[write page]write page %s, id: %s", page, page.getId()));
+            if (page.getClass() == BTreeRootPtrPage.class) {
+                logger.info(String.format("[write page][rootptr page] root id: %s, header id: %s", ((BTreeRootPtrPage) page).getRootId(), ((BTreeRootPtrPage) page).getHeaderId()));
+            } else if (page.getClass() == BTreeLeafPage.class) {
+                logger.info(String.format("[write page][leaf page] left id: %s, right id: %s, number of tuples: %s", ((BTreeLeafPage) page).getLeftSiblingId(), ((BTreeLeafPage) page).getRightSiblingId(), ((BTreeLeafPage) page).getNumTuples()));
+            } else if (page.getClass() == BTreeInternalPage.class) {
+                int num = ((BTreeInternalPage) page).getNumEntries();
+                for (int i = 0; i < num; i++) {
+                    try {
+                        logger.info(String.format("[write page][internal page] key: %s, child id: %s", ((BTreeInternalPage) page).getKey(i), ((BTreeInternalPage) page).getChildId(i)));
+                    } catch (NoSuchElementException e) {
+                        logger.error(String.format("[write page][internal page] index: %s", i));
+                    }
                 }
             }
         }
@@ -311,8 +315,6 @@ public class BTreeFile implements DbFile {
         page.setParentId(parent.getId());
         newPage.setParentId(parent.getId());
 
-        logger.debug(String.format("old page: left: %s, right: %s", page.getLeftSiblingId(), page.getRightSiblingId()));
-        logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
         if (page.getLeftSiblingId() != null) {
             BTreeLeafPage leftPage = (BTreeLeafPage) getPage(tid, dirtypages, page.getLeftSiblingId(), Permissions.READ_WRITE);
             leftPage.setRightSiblingId(newPage.getId());
@@ -320,10 +322,8 @@ public class BTreeFile implements DbFile {
         newPage.setRightSiblingId(page.getId());
         newPage.setLeftSiblingId(page.getLeftSiblingId());
         page.setLeftSiblingId(newPage.getId());
-        logger.debug(String.format("old page: left: %s, right: %s", page.getLeftSiblingId(), page.getRightSiblingId()));
-        logger.debug(String.format("new page: left: %s, right: %s", newPage.getLeftSiblingId(), newPage.getRightSiblingId()));
 
-        if (field.compare(Op.LESS_THAN, key)) {
+        if (field.compare(Op.LESS_THAN_OR_EQ, key)) {
             return newPage;
         } else {
             return page;
@@ -365,6 +365,11 @@ public class BTreeFile implements DbFile {
         // should be inserted.
         if (page.getNumEmptySlots() > 0) {
             return page;
+        }
+
+        if (Config.getBoolProperty("debugTree")) {
+            System.out.println(field + "start");
+            showTreeStructure(tid, dirtypages);
         }
 
         BTreeInternalPage newPage = (BTreeInternalPage) getEmptyPage(tid, dirtypages, BTreePageId.INTERNAL);
@@ -411,52 +416,15 @@ public class BTreeFile implements DbFile {
         newPage.setParentId(parentPage.getId());
 
         // insert entry to parent page
-        entry = new BTreeEntry(key, newPage.getId(), page.getId());
-        insertEntry(tid, dirtypages, parentPage, entry);
+        BTreeEntry parentEntry = new BTreeEntry(entry.getKey(), newPage.getId(), page.getId());
+        insertEntry(tid, dirtypages, parentPage, parentEntry);
 
-        logger.debug("internal split debug start");
-        BTreeInternalPageIterator it1 = new BTreeInternalPageIterator(newPage);
-        BTreeEntry leftFirst = it1.next();
-        logger.debug(leftFirst);
-
-        BTreeInternalPageReverseIterator it2 = new BTreeInternalPageReverseIterator(newPage);
-        BTreeEntry leftLast = it2.next();
-        logger.debug(leftLast);
-
-        BTreeInternalPageIterator it3 = new BTreeInternalPageIterator(page);
-        BTreeEntry rightFirst = it3.next();
-        logger.debug(rightFirst);
-
-        BTreeInternalPageReverseIterator it4 = new BTreeInternalPageReverseIterator(page);
-        BTreeEntry rightLast = it4.next();
-        logger.debug(rightLast);
-
-        logger.debug(String.format("parent entry: [%s - %s](page %s)|%s|(page %s)[%s - %s]",
-                leftFirst,leftLast,newPage.getId(),entry,page.getId(),rightFirst,rightLast));
-
-        logger.debug("internal split debug end");
-
-        logger.debug(String.format("field: %s, key: %s",field, key));
-
-        BTreeInternalPageIterator it5 = new BTreeInternalPageIterator(newPage);
-        while (it5.hasNext()) {
-            entry = it5.next();
-            BTreeLeafPage left = (BTreeLeafPage) getPage(tid, dirtypages, entry.getLeftChild(), Permissions.READ_ONLY);
-            right = (BTreeLeafPage) getPage(tid, dirtypages, entry.getRightChild(), Permissions.READ_ONLY);
-            assert left.getParentId().equals(newPage.getId());
-            assert right.getParentId().equals(newPage.getId());
+        if (Config.getBoolProperty("debugTree")) {
+            System.out.println(field + "end");
+            showTreeStructure(tid, dirtypages);
         }
 
-        BTreeInternalPageIterator it6 = new BTreeInternalPageIterator(page);
-        while (it6.hasNext()) {
-            entry = it6.next();
-            BTreeLeafPage left = (BTreeLeafPage) getPage(tid, dirtypages, entry.getLeftChild(), Permissions.READ_ONLY);
-            right = (BTreeLeafPage) getPage(tid, dirtypages, entry.getRightChild(), Permissions.READ_ONLY);
-            assert left.getParentId().equals(page.getId());
-            assert right.getParentId().equals(page.getId());
-        }
-
-        if (field.compare(Op.LESS_THAN, key)) {
+        if (field.compare(Op.LESS_THAN_OR_EQ, key)) {
             return newPage;
         } else {
             return page;
@@ -1401,7 +1369,7 @@ public class BTreeFile implements DbFile {
                 BTreeLeafPageReverseIterator newit3 = new BTreeLeafPageReverseIterator(right);
                 Field rightUpper = newit3.next().getField(0);
 
-                logger.debug(String.format("entry debug: [%s(%s,%s)|%s|(%s,%s)%s]", leftId, leftLower, leftUpper, key, rightLower, rightUpper, rightId));
+//                logger.debug(String.format("entry debug: [%s(%s,%s)|%s|(%s,%s)%s]", leftId, leftLower, leftUpper, key, rightLower, rightUpper, rightId));
 
                 assert leftLower.compare(Op.LESS_THAN_OR_EQ, leftUpper);
                 assert leftUpper.compare(Op.LESS_THAN_OR_EQ, key);
@@ -1415,6 +1383,97 @@ public class BTreeFile implements DbFile {
         parent.insertEntry(entry);
     }
 
+    private Field getMin(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid) {
+        try {
+            if (pid.pgcateg() == BTreePageId.LEAF) {
+                BTreeLeafPage page = (BTreeLeafPage) getPage(tid, dirtypages, pid, Permissions.READ_ONLY);
+                BTreeLeafPageIterator it = new BTreeLeafPageIterator(page);
+                return it.next().getField(keyField);
+            }
+
+            BTreeInternalPage page = (BTreeInternalPage) getPage(tid, dirtypages, pid, Permissions.READ_ONLY);
+            BTreeInternalPageIterator it = new BTreeInternalPageIterator(page);
+            return getMin(tid, dirtypages, it.next().getLeftChild());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private Field getMax(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid) {
+        try {
+            if (pid.pgcateg() == BTreePageId.LEAF) {
+                BTreeLeafPage page = (BTreeLeafPage) getPage(tid, dirtypages, pid, Permissions.READ_ONLY);
+                BTreeLeafPageReverseIterator it = new BTreeLeafPageReverseIterator(page);
+                return it.next().getField(keyField);
+            }
+
+            BTreeInternalPage page = (BTreeInternalPage) getPage(tid, dirtypages, pid, Permissions.READ_ONLY);
+            BTreeInternalPageReverseIterator it = new BTreeInternalPageReverseIterator(page);
+            return getMax(tid, dirtypages, it.next().getRightChild());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    private void showTreeStructure(TransactionId tid, HashMap<PageId, Page> dirtypages) {
+        String prefix = getPrefix(1);
+        try {
+            BTreeRootPtrPage rootPtr = getRootPtrPage(tid, dirtypages);
+            BTreePageId rootId = rootPtr.getRootId();
+            BTreeInternalPage root = (BTreeInternalPage) getPage(tid, dirtypages, rootId, Permissions.READ_ONLY);
+            System.out.println(root.getId());
+
+            BTreeInternalPageIterator it = new BTreeInternalPageIterator(root);
+            BTreeEntry entry = null;
+            while (it.hasNext()) {
+                entry = it.next();
+                System.out.println(prefix + entry.getLeftChild());
+                showNode(tid, dirtypages, entry.getLeftChild(), 2);
+                System.out.println(prefix + entry.getKey() + " (key)");
+            }
+            System.out.println(prefix + entry.getRightChild());
+            showNode(tid, dirtypages, entry.getRightChild(), 2);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void showNode(TransactionId tid, HashMap<PageId, Page> dirtypages, BTreePageId pid, int level) {
+        String prefix = getPrefix(level);
+        try {
+            if (pid.pgcateg() == BTreePageId.INTERNAL) {
+                BTreeInternalPage page = (BTreeInternalPage) getPage(tid, dirtypages, pid, Permissions.READ_ONLY);
+                BTreeInternalPageIterator it = new BTreeInternalPageIterator(page);
+                BTreeEntry entry = null;
+                while (it.hasNext()) {
+                    entry = it.next();
+                    showNode(tid, dirtypages, entry.getLeftChild(), level);
+                    System.out.println(getPrefix(level) + entry.getKey() + " (key)");
+                }
+                showNode(tid, dirtypages, entry.getRightChild(), level);
+            } else if (pid.pgcateg() == BTreePageId.LEAF) {
+                System.out.println(prefix + pid);
+                System.out.println(String.format("%s [%s - %s]",
+                        prefix,
+                        getMin(tid, dirtypages, pid),
+                        getMax(tid, dirtypages, pid)
+                ));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private String getPrefix(int level) {
+        String prefix = "";
+        for (int i = 0; i < level; i++) {
+            prefix += "--|";
+        }
+        prefix += " ";
+        return prefix;
+    }
 }
 
 /**

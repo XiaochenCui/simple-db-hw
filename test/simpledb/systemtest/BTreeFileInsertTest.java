@@ -1,10 +1,14 @@
 package simpledb.systemtest;
 
+import org.apache.log4j.Logger;
 import simpledb.systemtest.SimpleDbTestBase;
 import simpledb.Predicate.Op;
 import simpledb.*;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
 import org.junit.After;
@@ -12,274 +16,356 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
+
 import junit.framework.JUnit4TestAdapter;
 
 public class BTreeFileInsertTest extends SimpleDbTestBase {
-	private TransactionId tid;
-	
-	/**
-	 * Set up initial resources for each unit test.
-	 */
-	@Before
-	public void setUp() throws Exception {
-		tid = new TransactionId();
-	}
 
-	@After
-	public void tearDown() throws Exception {
-		Database.getBufferPool().transactionComplete(tid);
-		
-		// set the page size back to the default
-		BufferPool.resetPageSize();
-		Database.reset();
-	}
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
-	@Test public void addTuple() throws Exception {
-		// create an empty B+ tree file keyed on the second field of a 2-field tuple
-		File emptyFile = File.createTempFile("empty", ".dat");
-		emptyFile.deleteOnExit();
-		Database.reset();
-		BTreeFile empty = BTreeUtility.createEmptyBTreeFile(emptyFile.getAbsolutePath(), 2, 1);
+    private TransactionId tid;
 
-		Tuple tup = null;
-		// we should be able to add 502 tuples on one page
-		for (int i = 0; i < 502; ++i) {
-			tup = BTreeUtility.getBTreeTuple(i, 2);
-			empty.insertTuple(tid, tup);
-			assertEquals(1, empty.numPages());
-		}
+    /**
+     * Set up initial resources for each unit test.
+     */
+    @Before
+    public void setUp() throws Exception {
+        tid = new TransactionId();
+    }
 
-		// the next 251 tuples should live on page 2 since they are greater than
-		// all existing tuples in the file
-		for (int i = 502; i < 753; ++i) {
-			tup = BTreeUtility.getBTreeTuple(i, 2);
-			empty.insertTuple(tid, tup);
-			assertEquals(3, empty.numPages());
-		}
+    @After
+    public void tearDown() throws Exception {
+        Database.getBufferPool().transactionComplete(tid);
 
-		// one more insert greater than 502 should cause page 2 to split
-		tup = BTreeUtility.getBTreeTuple(753, 2);
-		empty.insertTuple(tid, tup);
-		assertEquals(4, empty.numPages());
+        // set the page size back to the default
+        BufferPool.resetPageSize();
+        Database.reset();
+    }
 
-		// now make sure the records are sorted on the key field
-		DbFileIterator it = empty.iterator(tid);
-		it.open();
-		int prev = -1;
-		while(it.hasNext()) {
-			Tuple t = it.next();
-			int value = ((IntField) t.getField(0)).getValue();
-			assertTrue(value >= prev);
-			prev = value;
-		} 
-	}
+    @Test
+    public void addTuple() throws Exception {
+        // create an empty B+ tree file keyed on the second field of a 2-field tuple
+        File emptyFile = File.createTempFile("empty", ".dat");
+        emptyFile.deleteOnExit();
+        Database.reset();
+        BTreeFile empty = BTreeUtility.createEmptyBTreeFile(emptyFile.getAbsolutePath(), 2, 1);
 
-	@Test public void addDuplicateTuples() throws Exception {
-		// create an empty B+ tree file keyed on the second field of a 2-field tuple
-		File emptyFile = File.createTempFile("empty", ".dat");
-		emptyFile.deleteOnExit();
-		Database.reset();
-		BTreeFile empty = BTreeUtility.createEmptyBTreeFile(emptyFile.getAbsolutePath(), 2, 1);
+        Tuple tup = null;
+        // we should be able to add 502 tuples on one page
+        for (int i = 0; i < 502; ++i) {
+            tup = BTreeUtility.getBTreeTuple(i, 2);
+            empty.insertTuple(tid, tup);
+            assertEquals(1, empty.numPages());
+        }
 
-		Tuple tup = null;
+        // the next 251 tuples should live on page 2 since they are greater than
+        // all existing tuples in the file
+        for (int i = 502; i < 753; ++i) {
+            tup = BTreeUtility.getBTreeTuple(i, 2);
+            empty.insertTuple(tid, tup);
+            assertEquals(3, empty.numPages());
+        }
 
-		BTreeChecker.checkRep(empty, tid, new HashMap<PageId, Page>(), true);
+        // one more insert greater than 502 should cause page 2 to split
+        tup = BTreeUtility.getBTreeTuple(753, 2);
+        empty.insertTuple(tid, tup);
+        assertEquals(4, empty.numPages());
 
-		// add a bunch of identical tuples
-		for (int i = 0; i < 5; ++i) {
-			for(int j = 0; j < 600; ++j) {
-				tup = BTreeUtility.getBTreeTuple(i, 2);
-				empty.insertTuple(tid, tup);
-			}
-		}
+        // now make sure the records are sorted on the key field
+        DbFileIterator it = empty.iterator(tid);
+        it.open();
+        int prev = -1;
+        while (it.hasNext()) {
+            Tuple t = it.next();
+            int value = ((IntField) t.getField(0)).getValue();
+            assertTrue(value >= prev);
+            prev = value;
+        }
+    }
 
-		BTreeChecker.checkRep(empty, tid, new HashMap<PageId, Page>(), true);
+    @Test
+    public void addDuplicateTuples() throws Exception {
+        // create an empty B+ tree file keyed on the second field of a 2-field tuple
+        File emptyFile = File.createTempFile("empty", ".dat");
+        emptyFile.deleteOnExit();
+        Database.reset();
+        BTreeFile empty = BTreeUtility.createEmptyBTreeFile(emptyFile.getAbsolutePath(), 2, 1);
 
-		// now search for some ranges and make sure we find all the tuples
-		IndexPredicate ipred = new IndexPredicate(Op.EQUALS, new IntField(3));
-		DbFileIterator it = empty.indexIterator(tid, ipred);
-		it.open();
-		int count = 0;
-		while(it.hasNext()) {
-			it.next();
-			count++;
-		} 
-		assertEquals(600, count);
+        Tuple tup = null;
 
-		ipred = new IndexPredicate(Op.GREATER_THAN_OR_EQ, new IntField(2));
-		it = empty.indexIterator(tid, ipred);
-		it.open();
-		count = 0;
-		while(it.hasNext()) {
-			it.next();
-			count++;
-		} 
-		assertEquals(1800, count);
+        BTreeChecker.checkRep(empty, tid, new HashMap<PageId, Page>(), true);
 
-		ipred = new IndexPredicate(Op.LESS_THAN, new IntField(2));
-		it = empty.indexIterator(tid, ipred);
-		it.open();
-		count = 0;
-		while(it.hasNext()) {
-			it.next();
-			count++;
-		} 
-		assertEquals(1200, count);
-	}
+        // add a bunch of identical tuples
+        for (int i = 0; i < 5; ++i) {
+            for (int j = 0; j < 600; ++j) {
+                tup = BTreeUtility.getBTreeTuple(i, 2);
+                empty.insertTuple(tid, tup);
+            }
+        }
 
-	@Test
-	public void testSplitLeafPage() throws Exception {
-		// This should create a B+ tree with one full page
-		BTreeFile onePageFile = BTreeUtility.createRandomBTreeFile(2, 502,
-				null, null, 0);
+        BTreeChecker.checkRep(empty, tid, new HashMap<PageId, Page>(), true);
 
-		// there should be 1 leaf page
-		assertEquals(1, onePageFile.numPages());
+        // now search for some ranges and make sure we find all the tuples
+        IndexPredicate ipred = new IndexPredicate(Op.EQUALS, new IntField(3));
+        DbFileIterator it = empty.indexIterator(tid, ipred);
+        it.open();
+        int count = 0;
+        while (it.hasNext()) {
+            it.next();
+            count++;
+        }
+        assertEquals(600, count);
 
-		// now insert a tuple
-		Database.getBufferPool().insertTuple(tid, onePageFile.getId(), BTreeUtility.getBTreeTuple(5000, 2));
+        ipred = new IndexPredicate(Op.GREATER_THAN_OR_EQ, new IntField(2));
+        it = empty.indexIterator(tid, ipred);
+        it.open();
+        count = 0;
+        while (it.hasNext()) {
+            it.next();
+            count++;
+        }
+        assertEquals(1800, count);
 
-		// there should now be 2 leaf pages + 1 internal node
-		assertEquals(3, onePageFile.numPages());
+        ipred = new IndexPredicate(Op.LESS_THAN, new IntField(2));
+        it = empty.indexIterator(tid, ipred);
+        it.open();
+        count = 0;
+        while (it.hasNext()) {
+            it.next();
+            count++;
+        }
+        assertEquals(1200, count);
+    }
 
-		// the root node should be an internal node and have 2 children (1 entry)
-		BTreePageId rootPtrPid = new BTreePageId(onePageFile.getId(), 0, BTreePageId.ROOT_PTR);
-		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(tid, rootPtrPid, Permissions.READ_ONLY);
-		BTreePageId rootId = rootPtr.getRootId();
-		assertEquals(rootId.pgcateg(), BTreePageId.INTERNAL);
-		BTreeInternalPage root = (BTreeInternalPage) Database.getBufferPool().getPage(tid, rootId, Permissions.READ_ONLY);
-		assertEquals(502, root.getNumEmptySlots());
+    @Test
+    public void testSplitLeafPage() throws Exception {
+        // This should create a B+ tree with one full page
+        BTreeFile onePageFile = BTreeUtility.createRandomBTreeFile(2, 502,
+                null, null, 0);
 
-		// each child should have half of the records
-		Iterator<BTreeEntry> it = root.iterator();
-		assertTrue(it.hasNext());
-		BTreeEntry e = it.next();
-		BTreeLeafPage leftChild = (BTreeLeafPage) Database.getBufferPool().getPage(tid, e.getLeftChild(), Permissions.READ_ONLY);
-		BTreeLeafPage rightChild = (BTreeLeafPage) Database.getBufferPool().getPage(tid, e.getRightChild(), Permissions.READ_ONLY);
-		assertTrue(leftChild.getNumEmptySlots() <= 251);
-		assertTrue(rightChild.getNumEmptySlots() <= 251);
+        // there should be 1 leaf page
+        assertEquals(1, onePageFile.numPages());
 
-	}
+        // now insert a tuple
+        Database.getBufferPool().insertTuple(tid, onePageFile.getId(), BTreeUtility.getBTreeTuple(5000, 2));
 
-	@Test
-	public void testSplitRootPage() throws Exception {
-		// This should create a packed B+ tree with no empty slots
-		// There are 503 keys per internal page (504 children) and 502 tuples per leaf page
-		// 504 * 502 = 253008
-		BTreeFile bigFile = BTreeUtility.createRandomBTreeFile(2, 253008,
-				null, null, 0);
+        // there should now be 2 leaf pages + 1 internal node
+        assertEquals(3, onePageFile.numPages());
 
-		// we will need more room in the buffer pool for this test
-		Database.resetBufferPool(500);		
+        // the root node should be an internal node and have 2 children (1 entry)
+        BTreePageId rootPtrPid = new BTreePageId(onePageFile.getId(), 0, BTreePageId.ROOT_PTR);
+        BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(tid, rootPtrPid, Permissions.READ_ONLY);
+        BTreePageId rootId = rootPtr.getRootId();
+        assertEquals(rootId.pgcateg(), BTreePageId.INTERNAL);
+        BTreeInternalPage root = (BTreeInternalPage) Database.getBufferPool().getPage(tid, rootId, Permissions.READ_ONLY);
+        assertEquals(502, root.getNumEmptySlots());
 
-		// there should be 504 leaf pages + 1 internal node
-		assertEquals(505, bigFile.numPages());
+        // each child should have half of the records
+        Iterator<BTreeEntry> it = root.iterator();
+        assertTrue(it.hasNext());
+        BTreeEntry e = it.next();
+        BTreeLeafPage leftChild = (BTreeLeafPage) Database.getBufferPool().getPage(tid, e.getLeftChild(), Permissions.READ_ONLY);
+        BTreeLeafPage rightChild = (BTreeLeafPage) Database.getBufferPool().getPage(tid, e.getRightChild(), Permissions.READ_ONLY);
+        assertTrue(leftChild.getNumEmptySlots() <= 251);
+        assertTrue(rightChild.getNumEmptySlots() <= 251);
 
-		// now insert a tuple
-		Database.getBufferPool().insertTuple(tid, bigFile.getId(), BTreeUtility.getBTreeTuple(10, 2));
+    }
 
-		// there should now be 505 leaf pages + 3 internal nodes
-		assertEquals(508, bigFile.numPages());
+    @Test
+    public void testSplitRootPage() throws Exception {
+        // This should create a packed B+ tree with no empty slots
+        // There are 503 keys per internal page (504 children) and 502 tuples per leaf page
+        // 504 * 502 = 253008
+        BTreeFile bigFile = BTreeUtility.createRandomBTreeFile(2, 253008,
+                null, null, 0);
 
-		// the root node should be an internal node and have 2 children (1 entry)
-		BTreePageId rootPtrPid = new BTreePageId(bigFile.getId(), 0, BTreePageId.ROOT_PTR);
-		BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(tid, rootPtrPid, Permissions.READ_ONLY);
-		BTreePageId rootId = rootPtr.getRootId();
-		assertEquals(rootId.pgcateg(), BTreePageId.INTERNAL);
-		BTreeInternalPage root = (BTreeInternalPage) Database.getBufferPool().getPage(tid, rootId, Permissions.READ_ONLY);
-		assertEquals(502, root.getNumEmptySlots());
+        // we will need more room in the buffer pool for this test
+        Database.resetBufferPool(500);
 
-		// each child should have half of the entries
-		Iterator<BTreeEntry> it = root.iterator();
-		assertTrue(it.hasNext());
-		BTreeEntry e = it.next();
-		BTreeInternalPage leftChild = (BTreeInternalPage) Database.getBufferPool().getPage(tid, e.getLeftChild(), Permissions.READ_ONLY);
-		BTreeInternalPage rightChild = (BTreeInternalPage) Database.getBufferPool().getPage(tid, e.getRightChild(), Permissions.READ_ONLY);
-		assertTrue(leftChild.getNumEmptySlots() <= 252);
-		assertTrue(rightChild.getNumEmptySlots() <= 252);
+        // there should be 504 leaf pages + 1 internal node
+        assertEquals(505, bigFile.numPages());
 
-		// now insert some random tuples and make sure we can find them
-		Random rand = new Random();
-		for(int i = 0; i < 100; i++) {
-			int item = rand.nextInt(BTreeUtility.MAX_RAND_VALUE);
-			Tuple t = BTreeUtility.getBTreeTuple(item, 2);
-			Database.getBufferPool().insertTuple(tid, bigFile.getId(), t);
+        // now insert a tuple
+        Database.getBufferPool().insertTuple(tid, bigFile.getId(), BTreeUtility.getBTreeTuple(10, 2));
 
-			IndexPredicate ipred = new IndexPredicate(Op.EQUALS, t.getField(0));
-			DbFileIterator fit = bigFile.indexIterator(tid, ipred);
-			fit.open();
-			boolean found = false;
-			while(fit.hasNext()) {
-				if(fit.next().equals(t)) {
-					found = true;
-					break;
-				}
-			}
-			fit.close();
-			assertTrue(found);
-		}
-	}
+        // there should now be 505 leaf pages + 3 internal nodes
+        assertEquals(508, bigFile.numPages());
 
-	@Test
-	public void testSplitInternalPage() throws Exception {
-		// For this test we will decrease the size of the Buffer Pool pages
-    	BufferPool.setPageSize(1024);
+        // the root node should be an internal node and have 2 children (1 entry)
+        BTreePageId rootPtrPid = new BTreePageId(bigFile.getId(), 0, BTreePageId.ROOT_PTR);
+        BTreeRootPtrPage rootPtr = (BTreeRootPtrPage) Database.getBufferPool().getPage(tid, rootPtrPid, Permissions.READ_ONLY);
+        BTreePageId rootId = rootPtr.getRootId();
+        assertEquals(rootId.pgcateg(), BTreePageId.INTERNAL);
+        BTreeInternalPage root = (BTreeInternalPage) Database.getBufferPool().getPage(tid, rootId, Permissions.READ_ONLY);
+        assertEquals(502, root.getNumEmptySlots());
 
-		// This should create a B+ tree with a packed second tier of internal pages
-		// and packed third tier of leaf pages
-    	// (124 entries per internal/leaf page, 125 children per internal page ->
-    	// 125*2*124 = 31000)
-		BTreeFile bigFile = BTreeUtility.createRandomBTreeFile(2, 31000,
-				null, null, 0);
-		
-		// we will need more room in the buffer pool for this test
-		Database.resetBufferPool(1000);
+        // each child should have half of the entries
+        Iterator<BTreeEntry> it = root.iterator();
+        assertTrue(it.hasNext());
+        BTreeEntry e = it.next();
+        BTreeInternalPage leftChild = (BTreeInternalPage) Database.getBufferPool().getPage(tid, e.getLeftChild(), Permissions.READ_ONLY);
+        BTreeInternalPage rightChild = (BTreeInternalPage) Database.getBufferPool().getPage(tid, e.getRightChild(), Permissions.READ_ONLY);
+        assertTrue(leftChild.getNumEmptySlots() <= 252);
+        assertTrue(rightChild.getNumEmptySlots() <= 252);
 
-		// there should be 250 leaf pages + 3 internal nodes
-		assertEquals(253, bigFile.numPages());
+        // now insert some random tuples and make sure we can find them
+        Random rand = new Random();
+        for (int i = 0; i < 100; i++) {
+            int item = rand.nextInt(BTreeUtility.MAX_RAND_VALUE);
+            Tuple t = BTreeUtility.getBTreeTuple(item, 2);
+            Database.getBufferPool().insertTuple(tid, bigFile.getId(), t);
 
-		// now insert some random tuples and make sure we can find them
-		Random rand = new Random();
-		for(int i = 0; i < 100; i++) {
-			int item = rand.nextInt(BTreeUtility.MAX_RAND_VALUE);
-			Tuple t = BTreeUtility.getBTreeTuple(item, 2);
-			Database.getBufferPool().insertTuple(tid, bigFile.getId(), t);
+            IndexPredicate ipred = new IndexPredicate(Op.EQUALS, t.getField(0));
+            DbFileIterator fit = bigFile.indexIterator(tid, ipred);
+            fit.open();
+            boolean found = false;
+            while (fit.hasNext()) {
+                if (fit.next().equals(t)) {
+                    found = true;
+                    break;
+                }
+            }
+            fit.close();
+            assertTrue(found);
+        }
+    }
 
-			IndexPredicate ipred = new IndexPredicate(Op.EQUALS, t.getField(0));
-			DbFileIterator fit = bigFile.indexIterator(tid, ipred);
-			fit.open();
-			boolean found = false;
-			while(fit.hasNext()) {
-				if(fit.next().equals(t)) {
-					found = true;
-					break;
-				}
-			}
-			fit.close();
-			assertTrue(found);
-		}
+    @Test
+    public void testSplitInternalPage() throws Exception {
+        // For this test we will decrease the size of the Buffer Pool pages
+        BufferPool.setPageSize(1024);
 
-		// now make sure we have 31100 records and they are all in sorted order
-		DbFileIterator fit = bigFile.iterator(tid);
-		int count = 0;
-		Tuple prev = null;
-		fit.open();
-		while(fit.hasNext()) {
-			Tuple tup = fit.next();
-			if(prev != null)
-				assertTrue(tup.getField(0).compare(Op.GREATER_THAN_OR_EQ, prev.getField(0)));
-			prev = tup;
-			count++;
-		}
-		fit.close();
-		assertEquals(31100, count);	
-		
-	}
+        // This should create a B+ tree with a packed second tier of internal pages
+        // and packed third tier of leaf pages
+        // (124 entries per internal/leaf page, 125 children per internal page ->
+        // 125*2*124 = 31000)
+        BTreeFile bigFile = BTreeUtility.createRandomBTreeFile(2, 31000,
+                null, null, 0);
 
-	/**
-	 * JUnit suite target
-	 */
-	public static junit.framework.Test suite() {
-		return new JUnit4TestAdapter(BTreeFileInsertTest.class);
-	}
+        // we will need more room in the buffer pool for this test
+        Database.resetBufferPool(1000);
+
+        // there should be 250 leaf pages + 3 internal nodes
+        assertEquals(253, bigFile.numPages());
+
+        // now make sure we have 31100 records and they are all in sorted order
+        if (logger.isDebugEnabled()) {
+            DbFileIterator fit = bigFile.iterator(tid);
+            int count = 0;
+            Tuple prev = null;
+            fit.open();
+            while (fit.hasNext()) {
+                Tuple tup = fit.next();
+                if (prev != null)
+                    assertTrue(tup.getField(0).compare(Op.GREATER_THAN_OR_EQ, prev.getField(0)));
+                prev = tup;
+                count++;
+            }
+            fit.close();
+            assertEquals(31000, count);
+        }
+
+        String filename = "tuplesdump.out";
+
+        if (Config.getBoolProperty("readFromFile")) {
+
+            BufferedReader reader = new BufferedReader(new FileReader(filename));
+            String line = reader.readLine();
+
+            int tempI = 0;
+            while (line != null) {
+                // string to tuple
+                List<String> stringList = Arrays.asList(line.split(","));
+                int item = Integer.parseInt(stringList.get(0));
+                Tuple t = BTreeUtility.getBTreeTuple(item, 2);
+                logger.debug(t);
+
+                Database.getBufferPool().insertTuple(tid, bigFile.getId(), t);
+                logger.debug("insert tuple: " + t);
+
+                IndexPredicate ipred = new IndexPredicate(Op.EQUALS, t.getField(0));
+                DbFileIterator fit = bigFile.indexIterator(tid, ipred);
+                fit.open();
+                boolean found = false;
+                while (fit.hasNext()) {
+                    if (fit.next().equals(t)) {
+                        found = true;
+                        break;
+                    }
+                }
+                fit.close();
+                assertTrue(found);
+
+                fit = bigFile.iterator(tid);
+                int count = 0;
+                Tuple prev = null;
+                fit.open();
+                while (fit.hasNext()) {
+                    Tuple tup = fit.next();
+                    if (prev != null)
+                        assertTrue(tup.getField(0).compare(Op.GREATER_THAN_OR_EQ, prev.getField(0)));
+                    prev = tup;
+                    count++;
+                }
+                fit.close();
+                assertEquals(31000 + tempI + 1, count);
+
+                line = reader.readLine();
+
+                tempI++;
+            }
+
+            if (logger.isDebugEnabled()) {
+                return;
+            }
+        }
+
+        File file = new File(filename);
+        file.delete();
+
+        // now insert some random tuples and make sure we can find them
+        Random rand = new Random();
+        for (int i = 0; i < 100; i++) {
+            int item = rand.nextInt(BTreeUtility.MAX_RAND_VALUE);
+            Tuple t = BTreeUtility.getBTreeTuple(item, 2);
+            Database.getBufferPool().insertTuple(tid, bigFile.getId(), t);
+            t.serializeToFile(filename, true);
+
+            IndexPredicate ipred = new IndexPredicate(Op.EQUALS, t.getField(0));
+            DbFileIterator fit = bigFile.indexIterator(tid, ipred);
+            fit.open();
+            boolean found = false;
+            while (fit.hasNext()) {
+                if (fit.next().equals(t)) {
+                    found = true;
+                    break;
+                }
+            }
+            fit.close();
+            assertTrue(found);
+        }
+
+        // now make sure we have 31100 records and they are all in sorted order
+        DbFileIterator fit = bigFile.iterator(tid);
+        int count = 0;
+        Tuple prev = null;
+        fit.open();
+        while (fit.hasNext()) {
+            Tuple tup = fit.next();
+            if (prev != null)
+                assertTrue(tup.getField(0).compare(Op.GREATER_THAN_OR_EQ, prev.getField(0)));
+            prev = tup;
+            count++;
+        }
+        fit.close();
+        assertEquals(31100, count);
+
+    }
+
+    /**
+     * JUnit suite target
+     */
+    public static junit.framework.Test suite() {
+        return new JUnit4TestAdapter(BTreeFileInsertTest.class);
+    }
 }

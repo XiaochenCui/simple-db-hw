@@ -25,6 +25,5 @@ public class LogExample {
 		logger.warn("This is warn : " + parameter);
 		logger.error("This is error : " + parameter);
 		logger.fatal("This is fatal : " + parameter);
-
 	}
 }

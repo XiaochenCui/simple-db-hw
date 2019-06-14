@@ -108,7 +108,11 @@ public class BufferPool {
 
         if (page == null) {
             DbFile f = Database.getCatalog().getDatabaseFile(pid.getTableId());
-            logger.debug(String.format("Read page %s from %s", pid, f.getFile()));
+
+            if (Config.debugPageRead()) {
+                logger.debug(String.format("Read page %s from %s", pid, f.getFile()));
+            }
+
             page = f.readPage(pid);
 
             // evict page
