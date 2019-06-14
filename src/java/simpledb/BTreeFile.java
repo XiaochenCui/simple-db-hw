@@ -367,8 +367,6 @@ public class BTreeFile implements DbFile {
             return page;
         }
 
-        BTreeFile bf = BTreeUtility.openBTreeFile(td.numFields(), f, keyField);
-
         BTreeInternalPage newPage = (BTreeInternalPage) getEmptyPage(tid, dirtypages, BTreePageId.INTERNAL);
         dirtypages.put(newPage.getId(), newPage);
 
@@ -394,10 +392,15 @@ public class BTreeFile implements DbFile {
         for (int i = 0; i < moveEntries; i++) {
             entry = entryIt.next();
 
-            // Delete entry first, since the insert action will modify entry object
             page.deleteKeyAndLeftChild(entry);
             insertEntry(tid, dirtypages, newPage, entry);
+
+            BTreeLeafPage left = (BTreeLeafPage) getPage(tid, dirtypages, entry.getLeftChild(), Permissions.READ_ONLY);
+            left.setParentId(newPage.getId());
         }
+
+        BTreeLeafPage right = (BTreeLeafPage) getPage(tid, dirtypages, entry.getRightChild(), Permissions.READ_ONLY);
+        right.setParentId(newPage.getId());
 
         Field key = entry.getKey();
         entry = entryIt.next();
@@ -411,9 +414,47 @@ public class BTreeFile implements DbFile {
         entry = new BTreeEntry(key, newPage.getId(), page.getId());
         insertEntry(tid, dirtypages, parentPage, entry);
 
-        writePage(page);
-        writePage(newPage);
-        writePage(parentPage);
+        logger.debug("internal split debug start");
+        BTreeInternalPageIterator it1 = new BTreeInternalPageIterator(newPage);
+        BTreeEntry leftFirst = it1.next();
+        logger.debug(leftFirst);
+
+        BTreeInternalPageReverseIterator it2 = new BTreeInternalPageReverseIterator(newPage);
+        BTreeEntry leftLast = it2.next();
+        logger.debug(leftLast);
+
+        BTreeInternalPageIterator it3 = new BTreeInternalPageIterator(page);
+        BTreeEntry rightFirst = it3.next();
+        logger.debug(rightFirst);
+
+        BTreeInternalPageReverseIterator it4 = new BTreeInternalPageReverseIterator(page);
+        BTreeEntry rightLast = it4.next();
+        logger.debug(rightLast);
+
+        logger.debug(String.format("parent entry: [%s - %s](page %s)|%s|(page %s)[%s - %s]",
+                leftFirst,leftLast,newPage.getId(),entry,page.getId(),rightFirst,rightLast));
+
+        logger.debug("internal split debug end");
+
+        logger.debug(String.format("field: %s, key: %s",field, key));
+
+        BTreeInternalPageIterator it5 = new BTreeInternalPageIterator(newPage);
+        while (it5.hasNext()) {
+            entry = it5.next();
+            BTreeLeafPage left = (BTreeLeafPage) getPage(tid, dirtypages, entry.getLeftChild(), Permissions.READ_ONLY);
+            right = (BTreeLeafPage) getPage(tid, dirtypages, entry.getRightChild(), Permissions.READ_ONLY);
+            assert left.getParentId().equals(newPage.getId());
+            assert right.getParentId().equals(newPage.getId());
+        }
+
+        BTreeInternalPageIterator it6 = new BTreeInternalPageIterator(page);
+        while (it6.hasNext()) {
+            entry = it6.next();
+            BTreeLeafPage left = (BTreeLeafPage) getPage(tid, dirtypages, entry.getLeftChild(), Permissions.READ_ONLY);
+            right = (BTreeLeafPage) getPage(tid, dirtypages, entry.getRightChild(), Permissions.READ_ONLY);
+            assert left.getParentId().equals(page.getId());
+            assert right.getParentId().equals(page.getId());
+        }
 
         if (field.compare(Op.LESS_THAN, key)) {
             return newPage;

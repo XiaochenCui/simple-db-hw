@@ -1,8 +1,10 @@
 package simpledb;
 
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 import java.io.*;
 
+import org.apache.log4j.Logger;
 import simpledb.Predicate.Op;
 
 /**
@@ -13,6 +15,9 @@ import simpledb.Predicate.Op;
  * @see BufferPool
  */
 public class BTreeInternalPage extends BTreePage {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
     private final byte header[];
     private final Field keys[];
     private final int children[];
