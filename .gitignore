@@ -14,3 +14,7 @@ log
 *.log
 
 *out
+
+junit*properties
+
+simple*.db
