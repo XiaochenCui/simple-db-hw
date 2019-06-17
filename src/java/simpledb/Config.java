@@ -8,22 +8,22 @@ public class Config {
     private static Properties p = new Properties();
 
     static {
-        InputStream inputStream = Config.class.getClassLoader().getResourceAsStream("config.properties");
-        Reader reader = new InputStreamReader(inputStream);
-
-        Properties p = new Properties();
-
         try {
-            p.load(reader);
-        } catch (IOException e) {
+            InputStream inputStream = Config.class.getClassLoader().getResourceAsStream("config.properties");
+            BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
+
+            p = new Properties();
+            p.load(bufferedReader);
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
 
     public static void main(String[] args) throws IOException {
-        System.out.println(p.getProperty("debugTransaction"));
-        System.out.println(p.getProperty("debugPageWrite"));
+        System.out.println(debugTransaction());
+        System.out.println(debugPageWrite());
+        System.out.println(debugPageRead());
     }
 
     public static boolean getBoolProperty(String key) {
