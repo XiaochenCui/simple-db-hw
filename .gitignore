@@ -18,3 +18,5 @@ log
 junit*properties
 
 simple*.db
+*.dat
+*.png

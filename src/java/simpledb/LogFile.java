@@ -467,6 +467,7 @@ public class LogFile {
             synchronized (this) {
                 preAppend();
                 // some code goes here
+                throw new IOException("not implement");
             }
         }
     }
@@ -494,6 +495,7 @@ public class LogFile {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
+                throw new IOException("not implement");
             }
         }
     }
@@ -501,6 +503,7 @@ public class LogFile {
     /** Print out a human readable represenation of the log */
     public void print() throws IOException {
         // some code goes here
+        throw new IOException("not implement");
     }
 
     public synchronized void force() throws IOException {

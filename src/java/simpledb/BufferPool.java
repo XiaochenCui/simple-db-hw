@@ -278,6 +278,7 @@ public class BufferPool {
     private synchronized void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
+
         Page page = buffer.get(pid);
         Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
         page.markDirty(false, null);
@@ -294,6 +295,10 @@ public class BufferPool {
         // not necessary for lab1|lab2
         for (PageId pageId : buffer.keySet()) {
             if (buffer.get(pageId) != null && holdsLock(tid, pageId)) {
+                // write to log
+                Page page = buffer.get(pageId);
+                Database.getLogFile().logWrite(tid,page.getBeforeImage(),page);
+
                 flushPage(pageId);
             }
         }
