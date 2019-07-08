@@ -1,7 +1,10 @@
 
 package simpledb;
 
+import org.apache.log4j.Logger;
+
 import java.io.*;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 import java.lang.reflect.*;
 
@@ -72,6 +75,8 @@ import java.lang.reflect.*;
  */
 
 public class LogFile {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     final File logFile;
     private RandomAccessFile raf;
@@ -197,7 +202,7 @@ public class LogFile {
     public synchronized void logWrite(TransactionId tid, Page before,
                                       Page after)
             throws IOException {
-        Debug.log("WRITE, offset = " + raf.getFilePointer());
+        logger.debug("WRITE, offset = " + raf.getFilePointer());
         preAppend();
         /* update record conists of
 

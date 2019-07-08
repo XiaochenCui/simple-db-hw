@@ -170,6 +170,8 @@ public class BufferPool {
         for (PageId pageId : buffer.keySet()) {
             if (commit) {
                 flushPages(tid);
+                Page page = buffer.get(pageId);
+                page.setBeforeImage();
             } else {
                 Page page = buffer.get(pageId);
                 if (page.isDirty() != null) {
@@ -283,6 +285,9 @@ public class BufferPool {
         Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
         page.markDirty(false, null);
 
+        TransactionId tid = new TransactionId();
+        Database.getLogFile().logWrite(tid,page.getBeforeImage(),page);
+
         // release locks associated with the page
         ConcurrentStatus.releaseAllLocks(pid);
     }
@@ -297,7 +302,6 @@ public class BufferPool {
             if (buffer.get(pageId) != null && holdsLock(tid, pageId)) {
                 // write to log
                 Page page = buffer.get(pageId);
-                Database.getLogFile().logWrite(tid,page.getBeforeImage(),page);
 
                 flushPage(pageId);
             }

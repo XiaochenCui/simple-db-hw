@@ -1,8 +1,10 @@
 package simpledb.systemtest;
 
 import java.io.*;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 
+import org.apache.log4j.Logger;
 import org.junit.Test;
 
 import simpledb.*;
@@ -13,6 +15,9 @@ import static org.junit.Assert.*;
  * Test logging, aborts, and recovery.
  */
 public class LogTest extends SimpleDbTestBase {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
     File file1;
     File file2;
     HeapFile hf1;
@@ -134,8 +139,10 @@ public class LogTest extends SimpleDbTestBase {
         // check that BufferPool.flushPage() calls LogFile.logWrite().
         doInsert(hf1, 1, 2);
 
-        if(Database.getLogFile().getTotalRecords() != 4)
+        if(Database.getLogFile().getTotalRecords() != 4) {
+            logger.info("total records: " + Database.getLogFile().getTotalRecords());
             throw new RuntimeException("LogTest: wrong # of log records; patch failed?");
+        }
 
         // *** Test:
         // check that BufferPool.transactionComplete(commit=true)
