@@ -157,10 +157,13 @@ public class LogTest extends SimpleDbTestBase {
                                      p1.getPageData());
         if(same == false)
             throw new RuntimeException("LogTest:setBeforeImage() not called? patch failed?");
+
+        t1.commit();
     }
 
     @Test public void TestFlushAll()
             throws IOException, DbException, TransactionAbortedException {
+        logger.info("TestFlushAll start...");
         setup();
 
         // *** Test:
