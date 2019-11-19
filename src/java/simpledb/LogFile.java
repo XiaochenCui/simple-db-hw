@@ -567,11 +567,15 @@ public class LogFile {
         s += String.format("\t\traw content [%d]:%s\n", logFile.length(), contentHex);
 
         RandomAccessFile tempRaf = new RandomAccessFile(logFile, "rw");
-        long lastWrittenCheckpoint = tempRaf.readLong();
-        if (lastWrittenCheckpoint != NO_CHECKPOINT_ID) {
-            s += String.format("\t\tlastWrittenCheckpoint : %d\n", lastWrittenCheckpoint);
-        } else {
-            s += String.format("\t\tlastWrittenCheckpoint : no checkpoint[%d]\n", lastWrittenCheckpoint);
+        try {
+            long lastWrittenCheckpoint = tempRaf.readLong();
+            if (lastWrittenCheckpoint != NO_CHECKPOINT_ID) {
+                s += String.format("\t\tlastWrittenCheckpoint : %d\n", lastWrittenCheckpoint);
+            } else {
+                s += String.format("\t\tlastWrittenCheckpoint : no checkpoint[%d]\n", lastWrittenCheckpoint);
+            }
+        } catch (EOFException e) {
+            logger.debug(s);
         }
 
         HashMap<Integer, String> recordName = new HashMap<>();
@@ -585,14 +589,20 @@ public class LogFile {
         long tid;
         long offset = 0;
 
+        int[] arr = {1, 2, 4};
+
         while (true) {
             try {
                 recordType = tempRaf.readInt();
                 tid = tempRaf.readLong();
 
-                int[] arr = {1, 2, 4};
+//                logger.debug(Arrays.asList(arr).contains(0));
+//                logger.debug(Arrays.asList(arr).contains(1));
+//                logger.debug(Arrays.asList(arr).contains(recordType));
                 if (Arrays.asList(arr).contains(recordType)) {
                     offset = tempRaf.readLong();
+                } else {
+                    offset = -1;
                 }
 
                 s += String.format("\t\trecordType: %s[%d], tid: %d\n", recordName.get(recordType), recordType, tid);
@@ -607,6 +617,10 @@ public class LogFile {
 
     public synchronized void force() throws IOException {
         raf.getChannel().force(true);
+    }
+
+    public <T> boolean contains(final T[] array, final T key) {
+        return Arrays.asList(array).contains(key);
     }
 
     static String readFile(String path, Charset encoding)
