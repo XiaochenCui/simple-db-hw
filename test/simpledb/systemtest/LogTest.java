@@ -196,8 +196,7 @@ public class LogTest extends SimpleDbTestBase {
         t.start();
         look(hf1, t, 1, true);
         look(hf1, t, 2, true);
-        look(hf1, t, 3, false);
-        t.commit();
+        look(hf1, t, 3, false); t.commit();
     }
 
     @Test public void TestAbort()

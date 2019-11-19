@@ -43,7 +43,7 @@ public class ConcurrentStatus {
     public static void acquireLock(TransactionId transactionId, PageId pageId, Lock lock) throws TransactionAbortedException {
 
         if (Config.debugTransaction()) {
-            logger.info(String.format("%s try to acquire %s on %s", transactionId, lock, pageId));
+            logger.debug(String.format("%s try to acquire %s on %s", transactionId, lock, pageId));
         }
 
         long startTime = System.currentTimeMillis();
@@ -116,7 +116,7 @@ public class ConcurrentStatus {
             holdPages.get(transactionId).add(pageId);
 
             if (Config.debugTransaction()) {
-                logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
+                logger.debug(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
             }
         } else if (lock.equals(Lock.EXCLUSIVE_LOCK)) {
             xLockMap.put(pageId, transactionId);
@@ -125,7 +125,7 @@ public class ConcurrentStatus {
             holdPages.get(transactionId).add(pageId);
 
             if (Config.debugTransaction()) {
-                logger.info(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
+                logger.debug(String.format("%s success acquire %s on %s", transactionId, lock, pageId));
             }
         }
 

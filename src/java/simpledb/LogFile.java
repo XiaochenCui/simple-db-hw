@@ -1,12 +1,21 @@
 
 package simpledb;
 
+import net.sf.antcontrib.logic.TryCatchTask;
 import org.apache.log4j.Logger;
 
-import java.io.*;
+import java.io.EOFException;
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
-import java.lang.reflect.*;
 
 /**
  * LogFile implements the recovery subsystem of SimpleDb.  This class is
@@ -130,6 +139,7 @@ public class LogFile {
     // the log.
     void preAppend() throws IOException {
         logger.debug("preAppend start, offsets = " + raf.getFilePointer());
+        print();
 
         totalRecords++;
         if (recoveryUndecided) {
@@ -141,6 +151,7 @@ public class LogFile {
             currentOffset = raf.getFilePointer();
         }
 
+        print();
         logger.debug("preAppend end, offsets = " + raf.getFilePointer());
     }
 
@@ -346,7 +357,7 @@ public class LogFile {
         //make sure we have buffer pool lock before proceeding
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
-                logger.debug(String.format("logCheckpoint start, offset: %s",raf.getFilePointer()));
+                logger.debug(String.format("logCheckpoint start, offset: %s", raf.getFilePointer()));
 
                 preAppend();
                 long startCpOffset, endCpOffset;
@@ -378,7 +389,7 @@ public class LogFile {
                 currentOffset = raf.getFilePointer();
                 //Debug.log("CP OFFSET = " + currentOffset);
 
-                logger.debug(String.format("logCheckpoint end, offset: %s",raf.getFilePointer()));
+                logger.debug(String.format("logCheckpoint end, offset: %s", raf.getFilePointer()));
             }
         }
 
@@ -496,18 +507,18 @@ public class LogFile {
             throws NoSuchElementException, IOException {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
+                logger.debug("map: " + tidToFirstLogRecord);
+
                 preAppend();
                 // some code goes here
-                logger.info("rollback start: " + tid);
-                logger.debug("map: " + tidToFirstLogRecord);
-                long offset = tidToFirstLogRecord.get(tid.getId()) + 20 + 12;
-                logger.debug("offset: " + offset);
-                raf.seek(offset);
-                Page page = readPageData(raf);
-                logger.debug(String.format("read page %s from log file", page.getId()));
-
-                page = page.getBeforeImage();
-                Database.getBufferPool().buffer.put(page.getId(),page);
+//                long offset = tidToFirstLogRecord.get(tid.getId()) + 20 + 12;
+//                logger.debug("offset: " + offset);
+//                raf.seek(offset);
+//                Page page = readPageData(raf);
+//                logger.debug(String.format("read page %s from log file", page.getId()));
+//
+//                page = page.getBeforeImage();
+//                Database.getBufferPool().buffer.put(page.getId(),page);
             }
         }
     }
@@ -547,11 +558,92 @@ public class LogFile {
      */
     public void print() throws IOException {
         // some code goes here
-        throw new IOException("not implement");
+        String s = "\n\tlog content:\n";
+        String contentHex = readFileHex(logFile);
+        logger.debug(contentHex);
+        logger.debug(contentHex.length());
+        logger.debug(logFile.length());
+
+        s += String.format("\t\traw content [%d]:%s\n", logFile.length(), contentHex);
+
+        RandomAccessFile tempRaf = new RandomAccessFile(logFile, "rw");
+        long lastWrittenCheckpoint = tempRaf.readLong();
+        if (lastWrittenCheckpoint != NO_CHECKPOINT_ID) {
+            s += String.format("\t\tlastWrittenCheckpoint : %d\n", lastWrittenCheckpoint);
+        } else {
+            s += String.format("\t\tlastWrittenCheckpoint : no checkpoint[%d]\n", lastWrittenCheckpoint);
+        }
+
+        HashMap<Integer, String> recordName = new HashMap<>();
+        recordName.put(1, "ABORT_RECORD");
+        recordName.put(2, "COMMIT_RECORD");
+        recordName.put(3, "UPDATE_RECORD");
+        recordName.put(4, "BEGIN_RECORD");
+        recordName.put(5, "CHECKPOINT_RECORD");
+
+        int recordType;
+        long tid;
+        long offset = 0;
+
+        while (true) {
+            try {
+                recordType = tempRaf.readInt();
+                tid = tempRaf.readLong();
+
+                int[] arr = {1, 2, 4};
+                if (Arrays.asList(arr).contains(recordType)) {
+                    offset = tempRaf.readLong();
+                }
+
+                s += String.format("\t\trecordType: %s[%d], tid: %d\n", recordName.get(recordType), recordType, tid);
+                s += String.format("\t\toffset: %d\n", offset);
+            } catch (EOFException e) {
+                break;
+            }
+        }
+
+        logger.debug(s);
     }
 
     public synchronized void force() throws IOException {
         raf.getChannel().force(true);
     }
 
+    static String readFile(String path, Charset encoding)
+            throws IOException {
+        byte[] encoded = Files.readAllBytes(Paths.get(path));
+        return new String(encoded, encoding);
+    }
+
+    static byte[] readFileByte(Path path)
+            throws IOException {
+        byte[] fileContent = Files.readAllBytes(path);
+        return fileContent;
+    }
+
+    static String readFileHex(File file)
+            throws IOException {
+        byte[] fileContent = Files.readAllBytes(file.toPath());
+        return encodeHexString(fileContent);
+    }
+
+    static String encodeHexString(byte[] byteArray) {
+        StringBuffer hexStringBuffer = new StringBuffer();
+        for (int i = 0; i < byteArray.length; i++) {
+            hexStringBuffer.append(byteToHex(byteArray[i]));
+        }
+        return hexStringBuffer.toString();
+    }
+
+    static String byteToHex(byte num) {
+        char[] hexDigits = new char[2];
+        hexDigits[0] = Character.forDigit((num >> 4) & 0xF, 16);
+        hexDigits[1] = Character.forDigit((num & 0xF), 16);
+        return new String(hexDigits);
+    }
+
+//    public String toHex(String arg) {
+//        return String.format("%040x", new BigInteger(1, arg.getBytes(/*YOUR_CHARSET?*/)));
+//        return Hex.encodeHexString(arg.getBytes(/* charset */));
+//    }
 }

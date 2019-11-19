@@ -18,7 +18,7 @@ public class Database {
     private final Catalog _catalog;
     private final BufferPool _bufferpool;
 
-    private final static String LOGFILENAME = "log";
+    private final static String LOGFILENAME = "wal.log";
     private final LogFile _logfile;
 
     private Database() {

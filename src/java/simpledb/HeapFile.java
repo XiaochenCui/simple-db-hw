@@ -1,7 +1,9 @@
 package simpledb;
 
 import java.io.*;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
+import org.apache.log4j.Logger;
 
 /**
  * HeapFile is an implementation of a DbFile that stores a collection of tuples
@@ -14,6 +16,8 @@ import java.util.*;
  * @see simpledb.HeapPage#HeapPage
  */
 public class HeapFile implements DbFile {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     private final File f;
     private final TupleDesc td;
@@ -67,6 +71,8 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
         // some code goes here
+        logger.debug("[disk io] read page: " + pid);
+
         try {
             RandomAccessFile rf = new RandomAccessFile(f, "r");
             rf.seek(pid.getPageNumber() * BufferPool.getPageSize());
@@ -84,6 +90,8 @@ public class HeapFile implements DbFile {
     public void writePage(Page page) throws IOException {
         // some code goes here
         // not necessary for lab1
+        logger.debug("[disk io] write page: " + page.getId());
+
         byte[] data = page.getPageData();
         RandomAccessFile rf = new RandomAccessFile(f, "rw");
         rf.seek(page.getId().getPageNumber() * BufferPool.getPageSize());
