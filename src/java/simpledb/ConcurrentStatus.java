@@ -201,12 +201,10 @@ public class ConcurrentStatus {
     }
 
     public synchronized static void showStatus() {
-        if (showStatus) {
-            globalLock.lock();
-            logger.debug("sLockMap: " + sLockMap);
-            logger.debug("xLockMap: " + xLockMap);
-            logger.debug("holdPages: " + holdPages);
-            globalLock.unlock();
-        }
+        globalLock.lock();
+        logger.debug("sLockMap: " + sLockMap);
+        logger.debug("xLockMap: " + xLockMap);
+        logger.debug("holdPages: " + holdPages);
+        globalLock.unlock();
     }
 }

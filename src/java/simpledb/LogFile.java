@@ -38,40 +38,39 @@ import java.lang.reflect.*;
  */
 
 /**
- <p> The format of the log file is as follows:
-
- <ul>
-
- <li> The first long integer of the file represents the offset of the
- last written checkpoint, or -1 if there are no checkpoints
-
- <li> All additional data in the log consists of log records.  Log
- records are variable length.
-
- <li> Each log record begins with an integer type and a long integer
- transaction id.
-
- <li> Each log record ends with a long integer file offset representing
- the position in the log file where the record began.
-
- <li> There are five record types: ABORT, COMMIT, UPDATE, BEGIN, and
- CHECKPOINT
-
- <li> ABORT, COMMIT, and BEGIN records contain no additional data
-
- <li>UPDATE RECORDS consist of two entries, a before image and an
- after image.  These images are serialized Page objects, and can be
- accessed with the LogFile.readPageData() and LogFile.writePageData()
- methods.  See LogFile.print() for an example.
-
- <li> CHECKPOINT records consist of active transactions at the time
- the checkpoint was taken and their first log record on disk.  The format
- of the record is an integer count of the number of transactions, as well
- as a long integer transaction id and a long integer first record offset
- for each active transaction.
-
- </ul>
-
+ * <p> The format of the log file is as follows:
+ *
+ * <ul>
+ *
+ * <li> The first long integer of the file represents the offset of the
+ * last written checkpoint, or -1 if there are no checkpoints
+ *
+ * <li> All additional data in the log consists of log records.  Log
+ * records are variable length.
+ *
+ * <li> Each log record begins with an integer type and a long integer
+ * transaction id.
+ *
+ * <li> Each log record ends with a long integer file offset representing
+ * the position in the log file where the record began.
+ *
+ * <li> There are five record types: ABORT, COMMIT, UPDATE, BEGIN, and
+ * CHECKPOINT
+ *
+ * <li> ABORT, COMMIT, and BEGIN records contain no additional data
+ *
+ * <li>UPDATE RECORDS consist of two entries, a before image and an
+ * after image.  These images are serialized Page objects, and can be
+ * accessed with the LogFile.readPageData() and LogFile.writePageData()
+ * methods.  See LogFile.print() for an example.
+ *
+ * <li> CHECKPOINT records consist of active transactions at the time
+ * the checkpoint was taken and their first log record on disk.  The format
+ * of the record is an integer count of the number of transactions, as well
+ * as a long integer transaction id and a long integer first record offset
+ * for each active transaction.
+ *
+ * </ul>
  */
 
 public class LogFile {
@@ -98,16 +97,17 @@ public class LogFile {
 
     HashMap<Long, Long> tidToFirstLogRecord = new HashMap<Long, Long>();
 
-    /** Constructor.
-     Initialize and back the log file with the specified file.
-     We're not sure yet whether the caller is creating a brand new DB,
-     in which case we should ignore the log file, or whether the caller
-     will eventually want to recover (after populating the Catalog).
-     So we make this decision lazily: if someone calls recover(), then
-     do it, while if someone starts adding log file entries, then first
-     throw out the initial log file contents.
-
-     @param f The log file's name
+    /**
+     * Constructor.
+     * Initialize and back the log file with the specified file.
+     * We're not sure yet whether the caller is creating a brand new DB,
+     * in which case we should ignore the log file, or whether the caller
+     * will eventually want to recover (after populating the Catalog).
+     * So we make this decision lazily: if someone calls recover(), then
+     * do it, while if someone starts adding log file entries, then first
+     * throw out the initial log file contents.
+     *
+     * @param f The log file's name
      */
     public LogFile(File f) throws IOException {
         this.logFile = f;
@@ -129,6 +129,8 @@ public class LogFile {
     // DB wants to do recovery, we're sure now -- it didn't. So truncate
     // the log.
     void preAppend() throws IOException {
+        logger.debug("preAppend start, offsets = " + raf.getFilePointer());
+
         totalRecords++;
         if (recoveryUndecided) {
             recoveryUndecided = false;
@@ -138,15 +140,19 @@ public class LogFile {
             raf.seek(raf.length());
             currentOffset = raf.getFilePointer();
         }
+
+        logger.debug("preAppend end, offsets = " + raf.getFilePointer());
     }
 
     public synchronized int getTotalRecords() {
         return totalRecords;
     }
 
-    /** Write an abort record to the log for the specified tid, force
-     the log to disk, and perform a rollback
-     @param tid The aborting transaction.
+    /**
+     * Write an abort record to the log for the specified tid, force
+     * the log to disk, and perform a rollback
+     *
+     * @param tid The aborting transaction.
      */
     public void logAbort(TransactionId tid) throws IOException {
         // must have buffer pool lock before proceeding, since this
@@ -173,14 +179,17 @@ public class LogFile {
         }
     }
 
-    /** Write a commit record to disk for the specified tid,
-     and force the log to disk.
-
-     @param tid The committing transaction.
+    /**
+     * Write a commit record to disk for the specified tid,
+     * and force the log to disk.
+     *
+     * @param tid The committing transaction.
      */
     public synchronized void logCommit(TransactionId tid) throws IOException {
+        logger.debug("logCommit start, offset = " + raf.getFilePointer());
+
         preAppend();
-        Debug.log("COMMIT " + tid.getId());
+        logger.debug("COMMIT " + tid);
         //should we verify that this is a live transaction?
 
         raf.writeInt(COMMIT_RECORD);
@@ -189,20 +198,24 @@ public class LogFile {
         currentOffset = raf.getFilePointer();
         force();
         tidToFirstLogRecord.remove(tid.getId());
+
+        logger.debug("logCommit end, offset = " + raf.getFilePointer());
     }
 
-    /** Write an UPDATE record to disk for the specified tid and page
-     (with provided         before and after images.)
-     @param tid The transaction performing the write
-     @param before The before image of the page
-     @param after The after image of the page
-
-     @see simpledb.Page#getBeforeImage
+    /**
+     * Write an UPDATE record to disk for the specified tid and page
+     * (with provided         before and after images.)
+     *
+     * @param tid    The transaction performing the write
+     * @param before The before image of the page
+     * @param after  The after image of the page
+     * @see simpledb.Page#getBeforeImage
      */
     public synchronized void logWrite(TransactionId tid, Page before,
                                       Page after)
             throws IOException {
-        logger.debug("WRITE, offset = " + raf.getFilePointer());
+        logger.debug(String.format("[%s] logWrite start, offset: %s", tid, raf.getFilePointer()));
+
         preAppend();
         /* update record conists of
 
@@ -211,6 +224,8 @@ public class LogFile {
            before page data (see writePageData)
            after page data
            start offset
+
+           4 + 8 + before page + after page + 8
         */
         raf.writeInt(UPDATE_RECORD);
         raf.writeLong(tid.getId());
@@ -220,7 +235,7 @@ public class LogFile {
         raf.writeLong(currentOffset);
         currentOffset = raf.getFilePointer();
 
-        Debug.log("WRITE OFFSET = " + currentOffset);
+        logger.debug(String.format("[%s] logWrite end, offset: %s", tid, raf.getFilePointer()));
     }
 
     void writePageData(RandomAccessFile raf, Page p) throws IOException {
@@ -248,7 +263,8 @@ public class LogFile {
         byte[] pageData = p.getPageData();
         raf.writeInt(pageData.length);
         raf.write(pageData);
-        //        Debug.log ("WROTE PAGE DATA, CLASS = " + pageClassName + ", table = " +  pid.getTableId() + ", page = " + pid.pageno());
+        logger.debug("page size: " + pageData.length);
+        logger.debug("WROTE PAGE DATA, CLASS = " + pageClassName + ", table = " + pid.getTableId() + ", page = " + pid.getPageNumber());
     }
 
     Page readPageData(RandomAccessFile raf) throws IOException {
@@ -282,7 +298,7 @@ public class LogFile {
 
             newPage = (Page) pageConsts[0].newInstance(pageArgs);
 
-            //            Debug.log("READ PAGE OF TYPE " + pageClassName + ", table = " + newPage.getId().getTableId() + ", page = " + newPage.getId().pageno());
+            logger.debug("READ PAGE OF TYPE " + pageClassName + ", table = " + newPage.getId().getTableId() + ", page = " + newPage.getId().getPageNumber());
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
             throw new IOException();
@@ -300,13 +316,15 @@ public class LogFile {
 
     }
 
-    /** Write a BEGIN record for the specified transaction
-     @param tid The transaction that is beginning
-
+    /**
+     * Write a BEGIN record for the specified transaction
+     *
+     * @param tid The transaction that is beginning
      */
     public synchronized void logXactionBegin(TransactionId tid)
             throws IOException {
-        Debug.log("BEGIN");
+        logger.debug(String.format("[%s] logXactionBegin start, offset: %s", tid, raf.getFilePointer()));
+
         if (tidToFirstLogRecord.get(tid.getId()) != null) {
             System.err.printf("logXactionBegin: already began this tid\n");
             throw new IOException("double logXactionBegin()");
@@ -318,15 +336,18 @@ public class LogFile {
         tidToFirstLogRecord.put(tid.getId(), currentOffset);
         currentOffset = raf.getFilePointer();
 
-        Debug.log("BEGIN OFFSET = " + currentOffset);
+        logger.debug(String.format("[%s] logXactionBegin end, offset: %s", tid, raf.getFilePointer()));
     }
 
-    /** Checkpoint the log and write a checkpoint record. */
+    /**
+     * Checkpoint the log and write a checkpoint record.
+     */
     public void logCheckpoint() throws IOException {
         //make sure we have buffer pool lock before proceeding
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
-                //Debug.log("CHECKPOINT, offset = " + raf.getFilePointer());
+                logger.debug(String.format("logCheckpoint start, offset: %s",raf.getFilePointer()));
+
                 preAppend();
                 long startCpOffset, endCpOffset;
                 Set<Long> keys = tidToFirstLogRecord.keySet();
@@ -341,7 +362,7 @@ public class LogFile {
                 raf.writeInt(keys.size());
                 while (els.hasNext()) {
                     Long key = els.next();
-                    Debug.log("WRITING CHECKPOINT TRANSACTION ID: " + key);
+                    logger.debug("WRITING CHECKPOINT TRANSACTION ID: " + key);
                     raf.writeLong(key);
                     //Debug.log("WRITING CHECKPOINT TRANSACTION OFFSET: " + tidToFirstLogRecord.get(key));
                     raf.writeLong(tidToFirstLogRecord.get(key));
@@ -356,14 +377,18 @@ public class LogFile {
                 raf.writeLong(currentOffset);
                 currentOffset = raf.getFilePointer();
                 //Debug.log("CP OFFSET = " + currentOffset);
+
+                logger.debug(String.format("logCheckpoint end, offset: %s",raf.getFilePointer()));
             }
         }
 
         logTruncate();
     }
 
-    /** Truncate any unneeded portion of the log to reduce its space
-     consumption */
+    /**
+     * Truncate any unneeded portion of the log to reduce its space
+     * consumption
+     */
     public synchronized void logTruncate() throws IOException {
         preAppend();
         raf.seek(0);
@@ -408,7 +433,7 @@ public class LogFile {
                 long record_tid = raf.readLong();
                 long newStart = logNew.getFilePointer();
 
-                Debug.log("NEW START = " + newStart);
+                logger.debug("NEW START = " + newStart);
 
                 logNew.writeInt(type);
                 logNew.writeLong(record_tid);
@@ -445,7 +470,7 @@ public class LogFile {
             }
         }
 
-        Debug.log("TRUNCATING LOG;  WAS " + raf.length() + " BYTES ; NEW START : " + minLogRecord + " NEW LENGTH: " + (raf.length() - minLogRecord));
+        logger.debug("TRUNCATING LOG;  WAS " + raf.length() + " BYTES ; NEW START : " + minLogRecord + " NEW LENGTH: " + (raf.length() - minLogRecord));
 
         raf.close();
         logFile.delete();
@@ -458,13 +483,14 @@ public class LogFile {
         //print();
     }
 
-    /** Rollback the specified transaction, setting the state of any
-     of pages it updated to their pre-updated state.  To preserve
-     transaction semantics, this should not be called on
-     transactions that have already committed (though this may not
-     be enforced by this method.)
-
-     @param tid The transaction to rollback
+    /**
+     * Rollback the specified transaction, setting the state of any
+     * of pages it updated to their pre-updated state.  To preserve
+     * transaction semantics, this should not be called on
+     * transactions that have already committed (though this may not
+     * be enforced by this method.)
+     *
+     * @param tid The transaction to rollback
      */
     public void rollback(TransactionId tid)
             throws NoSuchElementException, IOException {
@@ -472,14 +498,24 @@ public class LogFile {
             synchronized (this) {
                 preAppend();
                 // some code goes here
-                throw new IOException("not implement");
+                logger.info("rollback start: " + tid);
+                logger.debug("map: " + tidToFirstLogRecord);
+                long offset = tidToFirstLogRecord.get(tid.getId()) + 20 + 12;
+                logger.debug("offset: " + offset);
+                raf.seek(offset);
+                Page page = readPageData(raf);
+                logger.debug(String.format("read page %s from log file", page.getId()));
+
+                page = page.getBeforeImage();
+                Database.getBufferPool().buffer.put(page.getId(),page);
             }
         }
     }
 
-    /** Shutdown the logging system, writing out whatever state
-     is necessary so that start up can happen quickly (without
-     extensive recovery.)
+    /**
+     * Shutdown the logging system, writing out whatever state
+     * is necessary so that start up can happen quickly (without
+     * extensive recovery.)
      */
     public synchronized void shutdown() {
         try {
@@ -491,21 +527,24 @@ public class LogFile {
         }
     }
 
-    /** Recover the database system by ensuring that the updates of
-     committed transactions are installed and that the
-     updates of uncommitted transactions are not installed.
+    /**
+     * Recover the database system by ensuring that the updates of
+     * committed transactions are installed and that the
+     * updates of uncommitted transactions are not installed.
      */
     public void recover() throws IOException {
         synchronized (Database.getBufferPool()) {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
-                throw new IOException("not implement");
+                logger.info("recover start");
             }
         }
     }
 
-    /** Print out a human readable represenation of the log */
+    /**
+     * Print out a human readable represenation of the log
+     */
     public void print() throws IOException {
         // some code goes here
         throw new IOException("not implement");
