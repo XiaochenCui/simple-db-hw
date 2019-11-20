@@ -4,6 +4,7 @@ package simpledb;
 import net.sf.antcontrib.logic.TryCatchTask;
 import org.apache.log4j.Logger;
 
+import javax.xml.crypto.Data;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
@@ -105,6 +106,9 @@ public class LogFile {
     int totalRecords = 0; // for PatchTest //protected by this
 
     HashMap<Long, Long> tidToFirstLogRecord = new HashMap<Long, Long>();
+
+    String tempPageClassName = "";
+    String tempIdClassName = "";
 
     /**
      * Constructor.
@@ -285,6 +289,10 @@ public class LogFile {
         String pageClassName = raf.readUTF();
         String idClassName = raf.readUTF();
 
+        // temp variables
+        tempPageClassName = pageClassName;
+        tempIdClassName = idClassName;
+
         try {
             Class<?> idClass = Class.forName(idClassName);
             Class<?> pageClass = Class.forName(pageClassName);
@@ -309,7 +317,7 @@ public class LogFile {
 
             newPage = (Page) pageConsts[0].newInstance(pageArgs);
 
-            logger.debug("READ PAGE OF TYPE " + pageClassName + ", table = " + newPage.getId().getTableId() + ", page = " + newPage.getId().getPageNumber());
+//            logger.debug("READ PAGE OF TYPE " + pageClassName + ", table = " + newPage.getId().getTableId() + ", page = " + newPage.getId().getPageNumber());
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
             throw new IOException();
@@ -511,14 +519,31 @@ public class LogFile {
 
                 preAppend();
                 // some code goes here
-//                long offset = tidToFirstLogRecord.get(tid.getId()) + 20 + 12;
-//                logger.debug("offset: " + offset);
-//                raf.seek(offset);
-//                Page page = readPageData(raf);
-//                logger.debug(String.format("read page %s from log file", page.getId()));
-//
-//                page = page.getBeforeImage();
-//                Database.getBufferPool().buffer.put(page.getId(),page);
+                RandomAccessFile tempRaf = new RandomAccessFile(logFile,"rw");
+                long start = tidToFirstLogRecord.get(tid.getId());
+                tempRaf.seek(start + 20);
+                while (true) {
+                    try {
+                        int type = tempRaf.readInt();
+                        long record_tid = tempRaf.readLong();
+
+                        if (type == UPDATE_RECORD) {
+                            Page before = readPageData(tempRaf);
+                            Page after = readPageData(tempRaf);
+
+                            logger.debug("rollback page " + before.getId());
+                            Database.getCatalog().getDatabaseFile(before.getId().getTableId()).writePage(before);
+
+                            Database.getBufferPool().discardPage(before.getId());
+
+                            long offset = tempRaf.readLong();
+                        } else {
+                            break;
+                        }
+                    } catch (EOFException e) {
+                        break;
+                    }
+                }
             }
         }
     }
@@ -558,13 +583,33 @@ public class LogFile {
      */
     public void print() throws IOException {
         // some code goes here
-        String s = "\n\tlog content:\n";
-        String contentHex = readFileHex(logFile);
-        logger.debug(contentHex);
-        logger.debug(contentHex.length());
-        logger.debug(logFile.length());
 
-        s += String.format("\t\traw content [%d]:%s\n", logFile.length(), contentHex);
+        String s = "";
+        String contentHex = readFileHex(logFile);
+        if (contentHex.length() == 0) {
+            logger.debug("wal log empty");
+            return;
+        }
+
+        s += String.format("\n\traw content [%d]:", logFile.length());
+        String content = "";
+
+        int line = 0;
+        for (int i = 0; i+4 < contentHex.length(); i += 4) {
+            if (i % (4 * 32) == 0) {
+                content += "\n\t\t";
+                line++;
+                if (line >= 2) {
+                    break;
+                }
+            }
+            content += contentHex.substring(i,i+4);
+            content += " ";
+
+        }
+        s += content;
+
+        s += "\n\tstructured content:\n";
 
         RandomAccessFile tempRaf = new RandomAccessFile(logFile, "rw");
         try {
@@ -589,24 +634,58 @@ public class LogFile {
         long tid;
         long offset = 0;
 
-        int[] arr = {1, 2, 4};
+        Integer[] arr = {1, 2, 3, 4};
 
         while (true) {
             try {
                 recordType = tempRaf.readInt();
                 tid = tempRaf.readLong();
 
-//                logger.debug(Arrays.asList(arr).contains(0));
-//                logger.debug(Arrays.asList(arr).contains(1));
-//                logger.debug(Arrays.asList(arr).contains(recordType));
+                if (recordType == CHECKPOINT_RECORD) {
+                    s += "\nparse error";
+                }
+
+                String beforeImageS = "\t\t\timage: \n";
+                String afterImageS = "\t\t\tafterImage: \n";
+                if (recordType == UPDATE_RECORD) {
+                    Page beforeImage = readPageData(tempRaf);
+
+                    beforeImageS += String.format("\t\t\t\tclassName: %s\n", tempIdClassName);
+                    beforeImageS += String.format("\t\t\t\ttable: %s\n", beforeImage.getId().getTableId());
+                    beforeImageS += String.format("\t\t\t\tpage: %s\n", beforeImage.getId().getPageNumber());
+
+                    HeapPage image = (HeapPage) beforeImage;
+                    int beforeEmpty =  image.getNumEmptySlots();
+                    int beforeTotal = image.tuples.length;
+
+                    Page afterImage = readPageData(tempRaf);
+
+                    image = (HeapPage) afterImage;
+                    int afterEmpty =  image.getNumEmptySlots();
+                    int afterTotal = image.tuples.length;
+
+                    beforeImageS += String.format("\t\t\t\tbefore total: %d\n", beforeTotal);
+                    beforeImageS += String.format("\t\t\t\tbefore empty: %d\n", beforeEmpty);
+                    beforeImageS += String.format("\t\t\t\tafter total: %d\n", afterTotal);
+                    beforeImageS += String.format("\t\t\t\tafter empty: %d\n", afterEmpty);
+
+//                    afterImageS += String.format("\t\t\t\tclassName: %s\n", tempIdClassName);
+//                    afterImageS += String.format("\t\t\t\ttable: %s\n", afterImage.getId().getTableId());
+//                    afterImageS += String.format("\t\t\t\tpage: %s\n", afterImage.getId().getPageNumber());
+                }
+
                 if (Arrays.asList(arr).contains(recordType)) {
                     offset = tempRaf.readLong();
                 } else {
                     offset = -1;
                 }
 
-                s += String.format("\t\trecordType: %s[%d], tid: %d\n", recordName.get(recordType), recordType, tid);
-                s += String.format("\t\toffset: %d\n", offset);
+                s += String.format("\t\trecord:\n\t\t\ttype: %s[%d], \n\t\t\ttid: %d\n", recordName.get(recordType), recordType, tid);
+                s += String.format("\t\t\toffset: %d\n", offset);
+                if (recordType == UPDATE_RECORD) {
+                    s += beforeImageS;
+//                    s += afterImageS;
+                }
             } catch (EOFException e) {
                 break;
             }
