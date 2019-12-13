@@ -526,6 +526,7 @@ public class LogFile {
                     try {
                         int type = tempRaf.readInt();
                         long record_tid = tempRaf.readLong();
+                        logger.debug(String.format("record type: %s, record tid: %d", type, record_tid));
 
                         if (type == UPDATE_RECORD) {
                             Page before = readPageData(tempRaf);
@@ -533,13 +534,14 @@ public class LogFile {
 
                             logger.debug("rollback page " + before.getId());
                             Database.getCatalog().getDatabaseFile(before.getId().getTableId()).writePage(before);
+                            logger.debug(String.format("rollback page write complete, pageid: %s, empty slots: %d", before.getId(), ((HeapPage) before).getNumEmptySlots()));
 
                             Database.getBufferPool().discardPage(before.getId());
 
-                            long offset = tempRaf.readLong();
                         } else {
-                            break;
+
                         }
+                        long offset = tempRaf.readLong();
                     } catch (EOFException e) {
                         break;
                     }
@@ -634,19 +636,26 @@ public class LogFile {
         long tid;
         long offset = 0;
 
-        Integer[] arr = {1, 2, 3, 4};
+        Integer[] arr = {1, 2, 3, 4, 5};
 
         while (true) {
             try {
                 recordType = tempRaf.readInt();
                 tid = tempRaf.readLong();
 
-                if (recordType == CHECKPOINT_RECORD) {
-                    s += "\nparse error";
-                }
-
                 String beforeImageS = "\t\t\timage: \n";
                 String afterImageS = "\t\t\tafterImage: \n";
+                String checkS = "\t\t\tcheck point content: \n";
+
+                if (recordType == CHECKPOINT_RECORD) {
+                    int activeCount = tempRaf.readInt();
+                    for (int i = 0; i < activeCount; i++) {
+                        tid = tempRaf.readLong();
+                        long firstOffset = tempRaf.readLong();
+                        checkS += String.format("\t\t\t\ttransaction: %d, start offset: %d\n", tid, firstOffset);
+                    }
+                }
+
                 if (recordType == UPDATE_RECORD) {
                     Page beforeImage = readPageData(tempRaf);
 
@@ -664,9 +673,9 @@ public class LogFile {
                     int afterEmpty =  image.getNumEmptySlots();
                     int afterTotal = image.tuples.length;
 
-                    beforeImageS += String.format("\t\t\t\tbefore total: %d\n", beforeTotal);
+//                    beforeImageS += String.format("\t\t\t\tbefore total: %d\n", beforeTotal);
                     beforeImageS += String.format("\t\t\t\tbefore empty: %d\n", beforeEmpty);
-                    beforeImageS += String.format("\t\t\t\tafter total: %d\n", afterTotal);
+//                    beforeImageS += String.format("\t\t\t\tafter total: %d\n", afterTotal);
                     beforeImageS += String.format("\t\t\t\tafter empty: %d\n", afterEmpty);
 
 //                    afterImageS += String.format("\t\t\t\tclassName: %s\n", tempIdClassName);
@@ -685,6 +694,9 @@ public class LogFile {
                 if (recordType == UPDATE_RECORD) {
                     s += beforeImageS;
 //                    s += afterImageS;
+                }
+                if (recordType == CHECKPOINT_RECORD) {
+                    s += checkS;
                 }
             } catch (EOFException e) {
                 break;
@@ -735,8 +747,11 @@ public class LogFile {
         return new String(hexDigits);
     }
 
-//    public String toHex(String arg) {
-//        return String.format("%040x", new BigInteger(1, arg.getBytes(/*YOUR_CHARSET?*/)));
-//        return Hex.encodeHexString(arg.getBytes(/* charset */));
-//    }
+    static ArrayList<String> splitEvery(String source, int even) {
+        ArrayList<String> r = new ArrayList<>();
+        for (int i = 0; i+even < source.length(); i += 8) {
+            r.add(source.substring(i,i+even));
+        }
+        return r;
+    }
 }
