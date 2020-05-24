@@ -289,6 +289,8 @@ public class LogFile {
         String pageClassName = raf.readUTF();
         String idClassName = raf.readUTF();
 
+        logger.debug(String.format("page class: %s, id class: %s",pageClassName, idClassName));
+
         // temp variables
         tempPageClassName = pageClassName;
         tempIdClassName = idClassName;
@@ -525,23 +527,45 @@ public class LogFile {
                 while (true) {
                     try {
                         int type = tempRaf.readInt();
-                        long record_tid = tempRaf.readLong();
-                        logger.debug(String.format("record type: %s, record tid: %d", type, record_tid));
+                        logger.debug(String.format("record type: %s", type));
 
-                        if (type == UPDATE_RECORD) {
-                            Page before = readPageData(tempRaf);
-                            Page after = readPageData(tempRaf);
+                        if (type < 1 || type > 5) {
+                            break;
+                        }
 
-                            logger.debug("rollback page " + before.getId());
-                            Database.getCatalog().getDatabaseFile(before.getId().getTableId()).writePage(before);
-                            logger.debug(String.format("rollback page write complete, pageid: %s, empty slots: %d", before.getId(), ((HeapPage) before).getNumEmptySlots()));
+                        long record_tid;
 
-                            Database.getBufferPool().discardPage(before.getId());
+                        switch (type) {
+                            case UPDATE_RECORD:
+                                record_tid = tempRaf.readLong();
+                                logger.debug("tid: " + record_tid);
 
-                        } else {
+                                Page before = readPageData(tempRaf);
+                                Page after = readPageData(tempRaf);
 
+                                logger.debug("rollback page " + before.getId());
+                                Database.getCatalog().getDatabaseFile(before.getId().getTableId()).writePage(before);
+                                logger.debug(String.format("rollback page write complete, pageid: %s, empty slots: %d", before.getId(), ((HeapPage) before).getNumEmptySlots()));
+
+                                Database.getBufferPool().discardPage(before.getId());
+                                break;
+                            case CHECKPOINT_RECORD:
+                                int activeCount = tempRaf.readInt();
+                                logger.debug(String.format("checkpoint has %d transactions", activeCount));
+                                for (int i = 0; i < activeCount; i++) {
+                                    long tidTmp = tempRaf.readLong();
+                                    long firstOffset = tempRaf.readLong();
+                                    logger.debug(String.format("checkpoint transaction: %d, start offset: %d\n", tidTmp, firstOffset));
+                                }
+                                break;
+                            case COMMIT_RECORD:
+                            case BEGIN_RECORD:
+                                record_tid = tempRaf.readLong();
+                                logger.debug("tid: " + record_tid);
+                                break;
                         }
                         long offset = tempRaf.readLong();
+                        logger.debug("offset: " + offset);
                     } catch (EOFException e) {
                         break;
                     }
