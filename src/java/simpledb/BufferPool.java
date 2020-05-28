@@ -285,8 +285,11 @@ public class BufferPool {
         Database.getCatalog().getDatabaseFile(pid.getTableId()).writePage(page);
         page.markDirty(false, null);
 
-        TransactionId tid = new TransactionId();
-        Database.getLogFile().logWrite(tid,page.getBeforeImage(),page);
+//        only write raf log for heap storage structure
+        if (pid instanceof HeapPageId) {
+            TransactionId tid = new TransactionId();
+            Database.getLogFile().logWrite(tid,page.getBeforeImage(),page);
+        }
 
         // release locks associated with the page
         ConcurrentStatus.releaseAllLocks(pid);

@@ -4,8 +4,10 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 
+import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -17,6 +19,9 @@ import static org.junit.Assert.*;
 import junit.framework.JUnit4TestAdapter;
 
 public class BufferPoolWriteTest extends TestUtil.CreateHeapFile {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
+
     private TransactionId tid;
 
     // class to return multiple dirty pages on insert
@@ -55,8 +60,10 @@ public class BufferPoolWriteTest extends TestUtil.CreateHeapFile {
      */
     @Before
     public void setUp() throws Exception {
+        logger.debug("setup start");
         super.setUp();
         tid = new TransactionId();
+        logger.debug("setup finish");
     }
 
     @After

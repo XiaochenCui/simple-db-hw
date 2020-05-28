@@ -1,9 +1,12 @@
 package simpledb;
 
+import org.apache.log4j.Logger;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -17,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * @Threadsafe
  */
 public class Catalog {
+
+    final static Logger logger = Logger.getLogger(MethodHandles.lookup().lookupClass());
 
     private Map<Integer, String> tableIdTableNameMap = new HashMap<>();
     private Map<String, Integer> tableNameTableIdMap = new HashMap<>();
@@ -43,6 +48,7 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        logger.debug(String.format("add table to catalog, file: %s, name: %s", file, name));
         tableIdTableNameMap.put(file.getId(), name);
         tableNameTableIdMap.put(name, file.getId());
         tableIdDbTableMap.put(file.getId(), file);
@@ -92,6 +98,7 @@ public class Catalog {
             return tableIdDbTableMap.get(tableid).getTupleDesc();
         }
 
+        logger.debug(String.format("tableIdDbTableMap: %s",tableIdDbTableMap));
         throw new NoSuchElementException();
     }
 

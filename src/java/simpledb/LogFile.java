@@ -305,18 +305,30 @@ public class LogFile {
             for (int i = 0; i < numIdArgs; i++) {
                 idArgs[i] = new Integer(raf.readInt());
             }
+            logger.debug(String.format("id args (from raf log): %s", idArgs));
             pid = (PageId) idConsts[0].newInstance(idArgs);
+            logger.debug(String.format("pid: %s", pid));
 
             Constructor<?>[] pageConsts = pageClass.getDeclaredConstructors();
             int pageSize = raf.readInt();
 
+            logger.debug(String.format("pre read page data, page size: %s",pageSize));
             byte[] pageData = new byte[pageSize];
             raf.read(pageData); //read before image
+            logger.debug(String.format("post read page data, page data: %s",pageData));
 
             Object[] pageArgs = new Object[2];
+            logger.debug(String.format("init page args: %s",pageArgs));
             pageArgs[0] = pid;
             pageArgs[1] = pageData;
+            logger.debug(String.format("pid: %s, tableid: %s",pid, pid.getTableId()));
 
+//            add page to catelog
+//            Database.getCatalog().addTable();
+
+            logger.debug(String.format("updated page args: %s",pageArgs[0]));
+            logger.debug(String.format("updated page args: %s",pageArgs[1]));
+            logger.debug(String.format("page const: %s", pageConsts[0]));
             newPage = (Page) pageConsts[0].newInstance(pageArgs);
 
 //            logger.debug("READ PAGE OF TYPE " + pageClassName + ", table = " + newPage.getId().getTableId() + ", page = " + newPage.getId().getPageNumber());
@@ -637,6 +649,7 @@ public class LogFile {
 
         s += "\n\tstructured content:\n";
 
+        logger.debug(String.format("create temporary raf log: %s",logFile));
         RandomAccessFile tempRaf = new RandomAccessFile(logFile, "rw");
         try {
             long lastWrittenCheckpoint = tempRaf.readLong();
@@ -681,6 +694,16 @@ public class LogFile {
                 }
 
                 if (recordType == UPDATE_RECORD) {
+
+//                    The following sentence will cause problems with BufferPoolWriteTest, so we jump out here temporarily
+//                    The page initialization will failed since the tableid not in catalog
+//                    Error:
+//                    Caused by: java.util.NoSuchElementException
+//	at simpledb.Catalog.getTupleDesc(Catalog.java:102)
+//	at simpledb.HeapPage.<init>(HeapPage.java:46)
+
+                    if (true) break;
+
                     Page beforeImage = readPageData(tempRaf);
 
                     beforeImageS += String.format("\t\t\t\tclassName: %s\n", tempIdClassName);

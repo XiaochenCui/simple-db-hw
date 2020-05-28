@@ -93,10 +93,10 @@ public class BTreePageId implements PageId {
 
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append("(tableId: ").append(tableId)
+        sb.append("{BTreePageId: (tableId: ").append(tableId)
                 .append(", pgNo: ").append(pgNo)
                 .append(", pgcateg: ").append(categToString(pgcateg))
-                .append(")");
+                .append(")}");
 
         return sb.toString();
     }
